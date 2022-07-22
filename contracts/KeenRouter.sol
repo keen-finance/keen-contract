@@ -407,9 +407,17 @@ interface IWETH {
     function transfer(address to, uint value) external returns (bool);
     function withdraw(uint) external;
 }
+// File: contracts\KeenUser.sol
+pragma solidity >=0.5.0;
+interface IKeenUser{
+    function getParentAddress(address userAddress) external view returns (address parentAddress);
+    function containsStackUser(uint256 _stackType,address _user) external view returns (bool);
+    function createStackUser(address _user,uint _stackType,address parent)external;
+    function deleteStackUser(address _user,uint _stackType,address parent)external;
+
+}
 
 // File: contracts\KeenRouter.sol
-
 pragma solidity =0.6.6;
 
 
@@ -424,6 +432,7 @@ contract KeenRouter is IKeenRouter02 {
     address public immutable override factory;
     address public immutable override WETH;
     address public immutable WKEEN;
+    address public immutable keenUser;
 
     address public immutable committeeStackHolder;
 
@@ -432,10 +441,11 @@ contract KeenRouter is IKeenRouter02 {
         _;
     }
 
-    constructor(address _factory, address _WETH, address _WKEEN) public {
+    constructor(address _factory, address _WETH, address _WKEEN, address _keenUser) public {
         factory = _factory;
         WETH = _WETH;
         WKEEN = _WKEEN;
+        keenUser = _keenUser;
     }
 
     receive() external payable {
@@ -485,7 +495,8 @@ contract KeenRouter is IKeenRouter02 {
     ) external virtual override ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
         (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
         address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
-        
+        bool isCompanyUser = IKeenUser(keenUser).containsStackUser(1, _user);
+        require(isCompanyUser, 'KeenRouter: MUST_IS_COMPANY');
         //need replace token
         if(replaceToken){
             (address token0,address token1) = KeenLibrary.sortTokens(tokenA, tokenB);
@@ -524,7 +535,8 @@ contract KeenRouter is IKeenRouter02 {
         uint amountAMin,
         uint amountBMin,
         address to,
-        uint deadline
+        uint deadline,
+        address parent
     ) external virtual override ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
         (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
         address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
@@ -546,6 +558,7 @@ contract KeenRouter is IKeenRouter02 {
             TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
             TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
         }
+        IKeenUser(keenUser).createStackUser(to,2,parent);
         liquidity = IKeenPair(pair).mint(to,2);
     }
 
@@ -558,13 +571,15 @@ contract KeenRouter is IKeenRouter02 {
         uint amountAMin,
         uint amountBMin,
         address to,
-        uint deadline
+        uint deadline,
+        address parent
     ) external virtual override ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
         (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
         address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
 
         TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
         TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
+        IKeenUser(keenUser).createStackUser(to,3,parent);
         liquidity = IKeenPair(pair).mint(to,3);
     }
 
