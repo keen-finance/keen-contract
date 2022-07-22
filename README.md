@@ -6,11 +6,11 @@
 ## Install
 
 ```bash
-npm i
+yarn
 ```
 
-### Test
+### compile Contracts
 
 ```bash
-npm run test
+npx hardhat compile
 ```

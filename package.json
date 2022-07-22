@@ -1,7 +1,7 @@
 {
   "name": "marketplace-contracts",
   "version": "0.0.0-semantic-release",
-  "description": "Smart contracts for Decentraland Marketplace",
+  "description": "Smart contracts for Keen Finance",
   "main": "index.js",
   "devDependencies": {
     "@nomiclabs/hardhat-etherscan": "^2.1.7",

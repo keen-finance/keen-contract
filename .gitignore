@@ -71,3 +71,5 @@ dist.zip
 
 .vscode
 yarn.lock
+cache
+artifacts

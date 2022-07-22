@@ -27,7 +27,7 @@ interface IKeenFactory {
     function allPairs(uint) external view returns (address pair);
     function allPairsLength() external view returns (uint);
 
-    function createPair(address tokenA, address tokenB) external returns (address pair);
+    function createPair(address tokenA, address tokenB,address replaceTokenA,address replaceTokenB) external returns (address pair);
 
     function setFeeTo(address) external;
     function setFeeToSetter(address) external;
@@ -70,18 +70,22 @@ interface IKeenPair {
     function factory() external view returns (address);
     function token0() external view returns (address);
     function token1() external view returns (address);
+    function stackToken() external view returns (address);
+    function replaceToken0() external view returns (address);
+    function replaceToken1() external view returns (address);
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
     function price0CumulativeLast() external view returns (uint);
     function price1CumulativeLast() external view returns (uint);
     function kLast() external view returns (uint);
 
-    function mint(address to) external returns (uint liquidity);
-    function burn(address to) external returns (uint amount0, uint amount1);
+    function mint(address to,uint stackType) external returns (uint liquidity);
+    function burn(address to,uint stackType) external returns (uint amount0, uint amount1);
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
-    function skim(address to) external;
+    function skim(address to,uint stackType) external;
     function sync() external;
+    function addStack(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external;
 
-    function initialize(address, address) external;
+    function initialize(address, address,address,address,uint256,uint256,uint256) external;
 }
 
 interface IKeenERC20 {
@@ -125,7 +129,7 @@ contract KeenERC20 is IKeenERC20 {
     using SafeMath for uint;
 
     string public constant name = 'Keen LPs';
-    string public constant symbol = 'Cake-LP';
+    string public constant symbol = 'Keen-LP';
     uint8 public constant decimals = 18;
     uint  public totalSupply;
     mapping(address => uint) public balanceOf;
@@ -277,8 +281,11 @@ contract KeenPair is IKeenPair, KeenERC20 {
     bytes4 private constant SELECTOR = bytes4(keccak256(bytes('transfer(address,uint256)')));
 
     address public factory;
+    address public stackToken;
     address public token0;
     address public token1;
+    address public replaceToken0;
+    address public replaceToken1;
 
     uint112 private reserve0;           // uses single storage slot, accessible via getReserves
     uint112 private reserve1;           // uses single storage slot, accessible via getReserves
@@ -287,6 +294,12 @@ contract KeenPair is IKeenPair, KeenERC20 {
     uint public price0CumulativeLast;
     uint public price1CumulativeLast;
     uint public kLast; // reserve0 * reserve1, as of immediately after the most recent liquidity event
+
+    uint256 public companyStack;
+    uint256 public committeeStack;
+    uint256 public shareholderStack;
+
+    address public committeeStackHolder;
 
     uint private unlocked = 1;
     modifier lock() {
@@ -324,10 +337,25 @@ contract KeenPair is IKeenPair, KeenERC20 {
     }
 
     // called once by the factory at time of deployment
-    function initialize(address _token0, address _token1) external {
+    function initialize(address _token0, address _token1,
+    address _replaceToken0,address _replaceToken1,address _stackToken,
+    uint256 _companyStack,uint256 _committeeStack,uint256 _shareholderStack) external {
         require(msg.sender == factory, 'Keen: FORBIDDEN'); // sufficient check
         token0 = _token0;
         token1 = _token1;
+        replaceToken0 = _replaceToken0;
+        replaceToken1 = _replaceToken1;
+        stackToken = _stackToken;
+        companyStack = _companyStack;
+        committeeStack = _committeeStack;
+        shareholderStack = _shareholderStack;
+    }
+
+    function addStack(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external {
+        require(msg.sender == factory, 'Keen: FORBIDDEN');
+        companyStackRatio = companyStackRatio+_companyStackRatio;
+        committeeStackRatio = companyStackRatio+_committeeStackRatio;
+        shareholderStackRatio = shareholderStackRatio+_shareholderStackRatio;
     }
 
     // update reserves and, on the first call per block, price accumulators
@@ -368,13 +396,35 @@ contract KeenPair is IKeenPair, KeenERC20 {
     }
 
     // this low-level function should be called from a contract which performs important safety checks
-    function mint(address to) external lock returns (uint liquidity) {
+    function mint(address to,uint stackType) external lock returns (uint liquidity) {
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         uint balance0 = IERC20(token0).balanceOf(address(this));
+        if(replaceToken0 != address(0)){
+            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
+        }
         uint balance1 = IERC20(token1).balanceOf(address(this));
+        if(replaceToken1 != address(0)){
+            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
+        }
         uint amount0 = balance0.sub(_reserve0);
         uint amount1 = balance1.sub(_reserve1);
 
+        uint256 stackAmount = 0;
+        if(stackToken == token0){
+            stackAmount = amount0;
+        }else if(stackToken == token1){
+            stackAmount = amount1;
+        }
+        if(stackType == 1){
+            companyStack = companyStack.sub(stackAmount);
+            require(companyStack >= 0, 'Keen: INSUFFICIENT_STACK');
+        }else if(stackType == 2){
+            committeeStack = companyStack.sub(stackAmount);
+            require(committeeStack >= 0, 'Keen: INSUFFICIENT_STACK');
+        }else if(stackType == 3){
+            shareholderStack = shareholderStack.sub(stackAmount);
+            require(shareholderStack >= 0, 'Keen: INSUFFICIENT_STACK');
+        }
         bool feeOn = _mintFee(_reserve0, _reserve1);
         uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
         if (_totalSupply == 0) {
@@ -392,12 +442,20 @@ contract KeenPair is IKeenPair, KeenERC20 {
     }
 
     // this low-level function should be called from a contract which performs important safety checks
-    function burn(address to) external lock returns (uint amount0, uint amount1) {
+    function burn(address to,uint stackType) external lock returns (uint amount0, uint amount1) {
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         address _token0 = token0;                                // gas savings
         address _token1 = token1;                                // gas savings
-        uint balance0 = IERC20(_token0).balanceOf(address(this));
-        uint balance1 = IERC20(_token1).balanceOf(address(this));
+        uint tokenbalance0 = IERC20(_token0).balanceOf(address(this));
+        uint balance0 = tokenbalance0;
+        if(replaceToken0 != address(0)){
+            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
+        }
+        uint tokenbalance1 = IERC20(_token1).balanceOf(address(this));
+        uint balance1 = tokenbalance1;
+        if(replaceToken1 != address(0)){
+            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
+        }
         uint liquidity = balanceOf[address(this)];
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
@@ -405,11 +463,48 @@ contract KeenPair is IKeenPair, KeenERC20 {
         amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution
         amount1 = liquidity.mul(balance1) / _totalSupply; // using balances ensures pro-rata distribution
         require(amount0 > 0 && amount1 > 0, 'Keen: INSUFFICIENT_LIQUIDITY_BURNED');
+
+        uint256 stackAmount = 0;
+        if(stackToken == _token0){
+            stackAmount = amount0;
+        }else if(stackToken == _token1){
+            stackAmount = amount1;
+        }
+        if(stackType == 1){
+            companyStack = companyStack.add(stackAmount);
+        }else if(stackType == 2){
+            committeeStack = companyStack.add(stackAmount);
+        }else if(stackType == 3){
+            shareholderStack = shareholderStack.add(stackAmount);
+        }
         _burn(address(this), liquidity);
-        _safeTransfer(_token0, to, amount0);
-        _safeTransfer(_token1, to, amount1);
+
+        if(amount0 <= tokenbalance0){
+            _safeTransfer(_token0, to, amount0);
+        }else{
+            if(tokenbalance0 > 0){
+                _safeTransfer(_token0, to, tokenbalance0);
+            }
+            _safeTransfer(replaceToken0, to, amount0.sub(tokenbalance0));
+        }
+
+        if(amount1 <= tokenbalance1){
+            _safeTransfer(_token1, to, amount1);
+        }else{
+            if(tokenbalance0 > 0){
+                _safeTransfer(_token1, to, tokenbalance1);
+            }
+            _safeTransfer(replaceToken1, to, amount1.sub(tokenbalance1));
+        }
+        
         balance0 = IERC20(_token0).balanceOf(address(this));
+        if(replaceToken0 != address(0)){
+            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
+        }
         balance1 = IERC20(_token1).balanceOf(address(this));
+        if(replaceToken1 != address(0)){
+            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
+        }
 
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint(reserve0).mul(reserve1); // reserve0 and reserve1 are up-to-date
@@ -422,17 +517,43 @@ contract KeenPair is IKeenPair, KeenERC20 {
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         require(amount0Out < _reserve0 && amount1Out < _reserve1, 'Keen: INSUFFICIENT_LIQUIDITY');
 
-        uint balance0;
-        uint balance1;
+        uint balance0 = IERC20(_token0).balanceOf(address(this));
+        uint balance1 = IERC20(_token1).balanceOf(address(this));
         { // scope for _token{0,1}, avoids stack too deep errors
         address _token0 = token0;
         address _token1 = token1;
         require(to != _token0 && to != _token1, 'Keen: INVALID_TO');
-        if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out); // optimistically transfer tokens
-        if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out); // optimistically transfer tokens
+        if (amount0Out > 0){
+            // optimistically transfer tokens
+            if(amount0Out <= balance0){
+                _safeTransfer(_token0, to, amount0);
+            }else{
+                if(balance0 > 0){
+                    _safeTransfer(_token0, to, balance0);
+                }
+                _safeTransfer(replaceToken0, to, amount0Out.sub(balance0));
+            }
+        }
+        if (amount1Out > 0){
+            // optimistically transfer tokens
+            if(amount1Out <= balance1){
+                _safeTransfer(_token1, to, amount1Out);
+            }else{
+                if(balance1 > 0){
+                    _safeTransfer(_token1, to, balance1);
+                }
+                _safeTransfer(replaceToken1, to, amount1Out.sub(balance1));
+            }
+        } 
         if (data.length > 0) IKeenCallee(to).keenCall(msg.sender, amount0Out, amount1Out, data);
         balance0 = IERC20(_token0).balanceOf(address(this));
+        if(replaceToken0 != address(0)){
+            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
+        }
         balance1 = IERC20(_token1).balanceOf(address(this));
+        if(replaceToken1 != address(0)){
+            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
+        }
         }
         uint amount0In = balance0 > _reserve0 - amount0Out ? balance0 - (_reserve0 - amount0Out) : 0;
         uint amount1In = balance1 > _reserve1 - amount1Out ? balance1 - (_reserve1 - amount1Out) : 0;
@@ -448,16 +569,69 @@ contract KeenPair is IKeenPair, KeenERC20 {
     }
 
     // force balances to match reserves
-    function skim(address to) external lock {
+    function skim(address to,uint stackType) external lock {
         address _token0 = token0; // gas savings
         address _token1 = token1; // gas savings
-        _safeTransfer(_token0, to, IERC20(_token0).balanceOf(address(this)).sub(reserve0));
-        _safeTransfer(_token1, to, IERC20(_token1).balanceOf(address(this)).sub(reserve1));
+
+        uint tokenbalance0 = IERC20(_token0).balanceOf(address(this));
+        uint balance0 = tokenbalance0;
+        if(replaceToken0 != address(0)){
+            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
+        }
+        uint tokenbalance1 = IERC20(_token1).balanceOf(address(this));
+        uint balance1 = tokenbalance1;
+        if(replaceToken1 != address(0)){
+            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
+        }
+
+        uint amount0 = balance0.sub(_reserve0);
+        uint amount1 = balance1.sub(_reserve1);
+
+
+        uint256 stackAmount = 0;
+        if(stackToken == _token0){
+            stackAmount = amount0;
+        }else if(stackToken == _token1){
+            stackAmount = amount1;
+        }
+        if(stackType == 1){
+            companyStack = companyStack.add(stackAmount);
+        }else if(stackType == 2){
+            committeeStack = companyStack.add(stackAmount);
+        }else if(stackType == 3){
+            shareholderStack = shareholderStack.add(stackAmount);
+        }
+        if(amount0 <= tokenbalance0){
+            _safeTransfer(_token0, to, amount0);
+        }else{
+            if(tokenbalance0 > 0){
+                _safeTransfer(_token0, to, tokenbalance0);
+            }
+            _safeTransfer(replaceToken0, to, amount0.sub(tokenbalance0));
+        }
+
+        if(amount1 <= tokenbalance1){
+            _safeTransfer(_token1, to, amount1);
+        }else{
+            if(tokenbalance0 > 0){
+                _safeTransfer(_token1, to, tokenbalance1);
+            }
+            _safeTransfer(replaceToken1, to, amount1.sub(tokenbalance1));
+        }
+        
     }
 
     // force reserves to match balances
     function sync() external lock {
-        _update(IERC20(token0).balanceOf(address(this)), IERC20(token1).balanceOf(address(this)), reserve0, reserve1);
+        uint balance0 = IERC20(_token0).balanceOf(address(this));
+        if(replaceToken0 != address(0)){
+            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
+        }
+        uint balance1 = IERC20(_token1).balanceOf(address(this));
+        if(replaceToken1 != address(0)){
+            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
+        }
+        _update(balance0, balance1, reserve0, reserve1);
     }
 }
 
@@ -476,21 +650,33 @@ contract KeenFactory is IKeenFactory {
         feeToSetter = _feeToSetter;
     }
 
+    uint256 public companyStackRatio = 20;
+    uint256 public committeeStackRatio = 30;
+    uint256 public shareholderStackRatio = 50;
+    
+
     function allPairsLength() external view returns (uint) {
         return allPairs.length;
     }
 
-    function createPair(address tokenA,address replaceTokenA, address tokenB,address replaceTokenB) external returns (address pair) {
+    function createPair(address tokenA, address tokenB,address replaceTokenA,address replaceTokenB,address stackToken,uint256 maxStake) external returns (address pair) {
+        require(msg.sender == feeToSetter, 'Keen: FORBIDDEN');
         require(tokenA != tokenB, 'Keen: IDENTICAL_ADDRESSES');
+        require(replaceTokenA == address(0) || replaceTokenB == address(0), 'Keen: require replaceTokenA or replaceTokenB is zero');
+        require(tokenA == stackToken || tokenA == stackToken, 'Keen: require tokenA or tokenB is stackToken');
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+
+        (address replaceToken0, address replaceToken1) = tokenA < tokenB ? (replaceTokenA, replaceTokenB) : (replaceTokenB, replaceTokenA);
         require(token0 != address(0), 'Keen: ZERO_ADDRESS');
         require(getPair[token0][token1] == address(0), 'Keen: PAIR_EXISTS'); // single check is sufficient
         bytes memory bytecode = type(KeenPair).creationCode;
-        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1,replaceToken0,replaceToken1));
         assembly {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
-        IKeenPair(pair).initialize(token0, token1);
+        
+        
+        IKeenPair(pair).initialize(token0, token1,replaceToken0,replaceToken1,stackToken,maxStake*(companyStackRatio/100),maxStake*(committeeStackRatio/100),maxStake*(shareholderStackRatio/100));
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair; // populate mapping in the reverse direction
         allPairs.push(pair);
@@ -505,5 +691,18 @@ contract KeenFactory is IKeenFactory {
     function setFeeToSetter(address _feeToSetter) external {
         require(msg.sender == feeToSetter, 'Keen: FORBIDDEN');
         feeToSetter = _feeToSetter;
+    }
+
+    function setStackRatio(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external {
+        require(msg.sender == feeToSetter, 'Keen: FORBIDDEN');
+        companyStackRatio = _companyStackRatio;
+        committeeStackRatio = _committeeStackRatio;
+        shareholderStackRatio = _shareholderStackRatio;
+    }
+
+    function addStack(address tokenA, address tokenB,uint256 _stack) external {
+        require(msg.sender == feeToSetter, 'Keen: FORBIDDEN');
+        require(getPair[tokenA][tokenB] != address(0), 'Keen: PAIR_NOT_EXISTS');
+        IKeenPair(getPair[tokenA][tokenB]).addStack(_stack*(companyStackRatio/100),_stack*(committeeStackRatio/100),_stack*(shareholderStackRatio/100));
     }
 }
