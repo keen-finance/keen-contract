@@ -46,33 +46,22 @@ contract KeenUser is Context,AccessControlEnumerable{
         return stackTypeMap[_stackType].contains(_user);
     }
 
-    function createStackUser(address _user,uint _stackType,address parent) public  {
+    function createStackUser(address _user,uint _stackType,address parent) external {
         require(hasRole(CREATE_ROLE, _msgSender()), "KeenUser: must have create role to createStackUser");
         require(!stackTypeMap[_stackType].contains(_user), "KeenUser: user is exist");
         stackTypeMap[_stackType].set(_user,1);
         
-        if(userParents[_user] == address(0)){
-            address parentAddress = tcpPosition.getParentAddress(_user);
-            if(parentAddress != address(0)){
-                parentAddress = parent;
-            }
-            userParents[_user] = parentAddress;
-        }
+        addUserParent(_user,parent);
+        
     }
 
 
-    function deleteStackUser(address _user,uint _stackType,address parent) public  {
+    function deleteStackUser(address _user,uint _stackType,address parent) external  {
         require(hasRole(DELETE_ROLE, _msgSender()), "KeenUser: must have delete role to deleteStackUser");
         require(stackTypeMap[_stackType].contains(_user), "KeenUser: user is not exist");
         stackTypeMap[_stackType].remove(_user);
 
-        if(userParents[_user] == address(0)){
-            address parentAddress = tcpPosition.getParentAddress(_user);
-            if(parentAddress != address(0)){
-                parentAddress = parent;
-            }
-            userParents[_user] = parentAddress;
-        }
+        addUserParent(_user,parent);
     }
 
     
@@ -80,6 +69,16 @@ contract KeenUser is Context,AccessControlEnumerable{
         parentAddress = userParents[userAddress];
         if(parentAddress == address(0)){
             parentAddress = tcpPosition.getParentAddress(userAddress);
+        }
+    }
+
+    function addUserParent(address _user,address parent)private{
+        if(userParents[_user] == address(0) && Address.isContract(address(tcpPosition))){
+            address parentAddress = tcpPosition.getParentAddress(_user);
+            if(parentAddress != address(0)){
+                parentAddress = parent;
+            }
+            userParents[_user] = parentAddress;
         }
     }
 

@@ -58,42 +58,7 @@ interface IKeenRouter01 {
         address to,
         uint deadline
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETH(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountToken, uint amountETH);
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountToken, uint amountETH);
+    
     function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,
@@ -426,13 +391,13 @@ pragma solidity =0.6.6;
 
 
 
-contract KeenRouter is IKeenRouter02 {
+contract KeenRouter {
     using SafeMath for uint;
 
-    address public immutable override factory;
-    address public immutable override WETH;
+    address public immutable  factory;
+    address public immutable  WETH;
     address public immutable WKEEN;
-    address public immutable keenUser;
+    address public immutable keenUserContract;
 
     address public immutable committeeStackHolder;
 
@@ -441,11 +406,12 @@ contract KeenRouter is IKeenRouter02 {
         _;
     }
 
-    constructor(address _factory, address _WETH, address _WKEEN, address _keenUser) public {
+    constructor(address _factory, address _WETH, address _WKEEN, address _keenUserContract, address _committeeStackHolder) public {
         factory = _factory;
         WETH = _WETH;
         WKEEN = _WKEEN;
-        keenUser = _keenUser;
+        keenUserContract = _keenUserContract;
+        committeeStackHolder = _committeeStackHolder;
     }
 
     receive() external payable {
@@ -482,45 +448,43 @@ contract KeenRouter is IKeenRouter02 {
     }
 
     // **** company ****
-    function addLiquidityByCompany(
+    function addCompanyLiquidityByReplaceToken(
         address tokenA,
         address tokenB,
-        bool replaceToken,
         uint amountADesired,
         uint amountBDesired,
         uint amountAMin,
         uint amountBMin,
         address to,
         uint deadline
-    ) external virtual override ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
-        (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
-        address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
-        bool isCompanyUser = IKeenUser(keenUser).containsStackUser(1, _user);
-        require(isCompanyUser, 'KeenRouter: MUST_IS_COMPANY');
-        //need replace token
-        if(replaceToken){
-            (address token0,address token1) = KeenLibrary.sortTokens(tokenA, tokenB);
-            address replaceToken0 = KeenLibrary.getReplaceToken0(factory, tokenA, tokenB);
-            address replaceToken1 = KeenLibrary.getReplaceToken1(factory, tokenA, tokenB);
-            if(replaceToken0 != address(0)){
-                //token0 is usdt
-                if(token0 == tokenA){
-                    tokenA = replaceToken0;
-                }else{
-                    tokenB = replaceToken0;
-                }
-            }else if(replaceToken1 != address(0)){
-                //token1 is usdt
-                if(token1 == tokenA){
-                    tokenA = replaceToken1;
-                }else{
-                    tokenB = replaceToken1;
-                }
+    ) external virtual  ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
+        address _tokenA = tokenA;                                // gas savings
+        address _tokenB = tokenB;
+        (amountA, amountB) = _addLiquidity(_tokenA, _tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
+        address pair = KeenLibrary.pairFor(factory, _tokenA, _tokenB);
+        
+        require(IKeenUser(keenUserContract).containsStackUser(1, to), 'KeenRouter: MUST_IS_COMPANY');
+        (address token0,) = KeenLibrary.sortTokens(_tokenA, _tokenB);
+
+        address replaceToken0 = KeenLibrary.getReplaceToken0(factory, _tokenA, _tokenB);
+        address replaceToken1 = KeenLibrary.getReplaceToken1(factory, _tokenA, _tokenB);
+        if(replaceToken0 != address(0)){
+            //token0 is usdt
+            if(token0 == _tokenA){
+                _tokenA = replaceToken0;
+            }else{
+                _tokenB = replaceToken0;
+            }
+        }else if(replaceToken1 != address(0)){
+            //token1 is usdt
+            if(token0 != _tokenA){
+                _tokenA = replaceToken1;
+            }else{
+                _tokenB = replaceToken1;
             }
         }
-
-        TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
-        TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
+        TransferHelper.safeTransferFrom(_tokenA, msg.sender, pair, amountA);
+        TransferHelper.safeTransferFrom(_tokenB, msg.sender, pair, amountB);
         
         liquidity = IKeenPair(pair).mint(to,1);
     }
@@ -537,28 +501,34 @@ contract KeenRouter is IKeenRouter02 {
         address to,
         uint deadline,
         address parent
-    ) external virtual override ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
-        (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
-        address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
+    ) external virtual  ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
+        address _tokenA = tokenA;                                // gas savings
+        address _tokenB = tokenB;
+        (amountA, amountB) = _addLiquidity(_tokenA, _tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
+        address pair = KeenLibrary.pairFor(factory, _tokenA, _tokenB);
 
         if(!isWKEEN){
-            address stackToken = KeenLibrary.getStackToken(factory, tokenA, tokenB);
-            if(stackToken == tokenA){
+            address stackToken = KeenLibrary.getStackToken(factory, _tokenA, _tokenB);
+            if(stackToken == _tokenA){
                 //tokenB is usdt
                 TransferHelper.safeTransferFrom(WKEEN, msg.sender, committeeStackHolder, amountA);
-                TransferHelper.safeTransferFrom(tokenA, committeeStackHolder, pair, amountA);
-                TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
-            }else if(stackToken == tokenB){
+                TransferHelper.safeTransferFrom(_tokenA, committeeStackHolder, pair, amountA);
+                TransferHelper.safeTransferFrom(_tokenB, msg.sender, pair, amountB);
+            }else if(stackToken == _tokenB){
                 //tokenA is usdt
-                TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
+                TransferHelper.safeTransferFrom(_tokenA, msg.sender, pair, amountA);
                 TransferHelper.safeTransferFrom(WKEEN, msg.sender, committeeStackHolder, amountB);
-                TransferHelper.safeTransferFrom(tokenB, committeeStackHolder, pair, amountB);
+                TransferHelper.safeTransferFrom(_tokenB, committeeStackHolder, pair, amountB);
             }
         }else{
-            TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
-            TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
+            TransferHelper.safeTransferFrom(_tokenA, msg.sender, pair, amountA);
+            TransferHelper.safeTransferFrom(_tokenB, msg.sender, pair, amountB);
         }
-        IKeenUser(keenUser).createStackUser(to,2,parent);
+        bool isCommittee = IKeenUser(keenUserContract).containsStackUser(2, to);
+        if(!isCommittee){
+            IKeenUser(keenUserContract).createStackUser(to,2,parent);
+        }
+        
         liquidity = IKeenPair(pair).mint(to,2);
     }
 
@@ -573,13 +543,17 @@ contract KeenRouter is IKeenRouter02 {
         address to,
         uint deadline,
         address parent
-    ) external virtual override ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
+    ) external virtual  ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
         (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
         address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
 
         TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
         TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
-        IKeenUser(keenUser).createStackUser(to,3,parent);
+
+        bool isShareholders = IKeenUser(keenUserContract).containsStackUser(3, to);
+        if(!isShareholders){
+            IKeenUser(keenUserContract).createStackUser(to,3,parent);
+        }
         liquidity = IKeenPair(pair).mint(to,3);
     }
 
@@ -593,104 +567,104 @@ contract KeenRouter is IKeenRouter02 {
         uint amountBMin,
         address to,
         uint deadline
-    ) public virtual override ensure(deadline) returns (uint amountA, uint amountB) {
+    ) public virtual  ensure(deadline) returns (uint amountA, uint amountB) {
         address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
         IKeenPair(pair).transferFrom(msg.sender, pair, liquidity); // send liquidity to pair
-        (uint amount0, uint amount1) = IKeenPair(pair).burn(to);
+        (uint amount0, uint amount1) = IKeenPair(pair).burn(to,2);
         (address token0,) = KeenLibrary.sortTokens(tokenA, tokenB);
         (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
         require(amountA >= amountAMin, 'KeenRouter: INSUFFICIENT_A_AMOUNT');
         require(amountB >= amountBMin, 'KeenRouter: INSUFFICIENT_B_AMOUNT');
     }
-    function removeLiquidityETH(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) public virtual override ensure(deadline) returns (uint amountToken, uint amountETH) {
-        (amountToken, amountETH) = removeLiquidity(
-            token,
-            WETH,
-            liquidity,
-            amountTokenMin,
-            amountETHMin,
-            address(this),
-            deadline
-        );
-        TransferHelper.safeTransfer(token, to, amountToken);
-        IWETH(WETH).withdraw(amountETH);
-        TransferHelper.safeTransferETH(to, amountETH);
-    }
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external virtual override returns (uint amountA, uint amountB) {
-        address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
-        uint value = approveMax ? uint(-1) : liquidity;
-        IKeenPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
-        (amountA, amountB) = removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, to, deadline);
-    }
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external virtual override returns (uint amountToken, uint amountETH) {
-        address pair = KeenLibrary.pairFor(factory, token, WETH);
-        uint value = approveMax ? uint(-1) : liquidity;
-        IKeenPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
-        (amountToken, amountETH) = removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, to, deadline);
-    }
+    // function removeLiquidityETH(
+    //     address token,
+    //     uint liquidity,
+    //     uint amountTokenMin,
+    //     uint amountETHMin,
+    //     address to,
+    //     uint deadline
+    // ) public virtual  ensure(deadline) returns (uint amountToken, uint amountETH) {
+    //     (amountToken, amountETH) = removeLiquidity(
+    //         token,
+    //         WETH,
+    //         liquidity,
+    //         amountTokenMin,
+    //         amountETHMin,
+    //         address(this),
+    //         deadline
+    //     );
+    //     TransferHelper.safeTransfer(token, to, amountToken);
+    //     IWETH(WETH).withdraw(amountETH);
+    //     TransferHelper.safeTransferETH(to, amountETH);
+    // }
+    // function removeLiquidityWithPermit(
+    //     address tokenA,
+    //     address tokenB,
+    //     uint liquidity,
+    //     uint amountAMin,
+    //     uint amountBMin,
+    //     address to,
+    //     uint deadline,
+    //     bool approveMax, uint8 v, bytes32 r, bytes32 s
+    // ) external virtual  returns (uint amountA, uint amountB) {
+    //     address pair = KeenLibrary.pairFor(factory, tokenA, tokenB);
+    //     uint value = approveMax ? uint(-1) : liquidity;
+    //     IKeenPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
+    //     (amountA, amountB) = removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, to, deadline);
+    // }
+    // function removeLiquidityETHWithPermit(
+    //     address token,
+    //     uint liquidity,
+    //     uint amountTokenMin,
+    //     uint amountETHMin,
+    //     address to,
+    //     uint deadline,
+    //     bool approveMax, uint8 v, bytes32 r, bytes32 s
+    // ) external virtual  returns (uint amountToken, uint amountETH) {
+    //     address pair = KeenLibrary.pairFor(factory, token, WETH);
+    //     uint value = approveMax ? uint(-1) : liquidity;
+    //     IKeenPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
+    //     (amountToken, amountETH) = removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, to, deadline);
+    // }
 
-    // **** REMOVE LIQUIDITY (supporting fee-on-transfer tokens) ****
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) public virtual override ensure(deadline) returns (uint amountETH) {
-        (, amountETH) = removeLiquidity(
-            token,
-            WETH,
-            liquidity,
-            amountTokenMin,
-            amountETHMin,
-            address(this),
-            deadline
-        );
-        TransferHelper.safeTransfer(token, to, IERC20(token).balanceOf(address(this)));
-        IWETH(WETH).withdraw(amountETH);
-        TransferHelper.safeTransferETH(to, amountETH);
-    }
-    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external virtual override returns (uint amountETH) {
-        address pair = KeenLibrary.pairFor(factory, token, WETH);
-        uint value = approveMax ? uint(-1) : liquidity;
-        IKeenPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
-        amountETH = removeLiquidityETHSupportingFeeOnTransferTokens(
-            token, liquidity, amountTokenMin, amountETHMin, to, deadline
-        );
-    }
+    // // **** REMOVE LIQUIDITY (supporting fee-on-transfer tokens) ****
+    // function removeLiquidityETHSupportingFeeOnTransferTokens(
+    //     address token,
+    //     uint liquidity,
+    //     uint amountTokenMin,
+    //     uint amountETHMin,
+    //     address to,
+    //     uint deadline
+    // ) public virtual  ensure(deadline) returns (uint amountETH) {
+    //     (, amountETH) = removeLiquidity(
+    //         token,
+    //         WETH,
+    //         liquidity,
+    //         amountTokenMin,
+    //         amountETHMin,
+    //         address(this),
+    //         deadline
+    //     );
+    //     TransferHelper.safeTransfer(token, to, IERC20(token).balanceOf(address(this)));
+    //     IWETH(WETH).withdraw(amountETH);
+    //     TransferHelper.safeTransferETH(to, amountETH);
+    // }
+    // function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
+    //     address token,
+    //     uint liquidity,
+    //     uint amountTokenMin,
+    //     uint amountETHMin,
+    //     address to,
+    //     uint deadline,
+    //     bool approveMax, uint8 v, bytes32 r, bytes32 s
+    // ) external virtual  returns (uint amountETH) {
+    //     address pair = KeenLibrary.pairFor(factory, token, WETH);
+    //     uint value = approveMax ? uint(-1) : liquidity;
+    //     IKeenPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
+    //     amountETH = removeLiquidityETHSupportingFeeOnTransferTokens(
+    //         token, liquidity, amountTokenMin, amountETHMin, to, deadline
+    //     );
+    // }
 
     // **** SWAP ****
     // requires the initial amount to have already been sent to the first pair
@@ -712,7 +686,7 @@ contract KeenRouter is IKeenRouter02 {
         address[] calldata path,
         address to,
         uint deadline
-    ) external virtual override ensure(deadline) returns (uint[] memory amounts) {
+    ) external virtual  ensure(deadline) returns (uint[] memory amounts) {
         amounts = KeenLibrary.getAmountsOut(factory, amountIn, path);
         require(amounts[amounts.length - 1] >= amountOutMin, 'KeenRouter: INSUFFICIENT_OUTPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
@@ -726,7 +700,7 @@ contract KeenRouter is IKeenRouter02 {
         address[] calldata path,
         address to,
         uint deadline
-    ) external virtual override ensure(deadline) returns (uint[] memory amounts) {
+    ) external virtual  ensure(deadline) returns (uint[] memory amounts) {
         amounts = KeenLibrary.getAmountsIn(factory, amountOut, path);
         require(amounts[0] <= amountInMax, 'KeenRouter: EXCESSIVE_INPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
@@ -737,7 +711,7 @@ contract KeenRouter is IKeenRouter02 {
     function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
         external
         virtual
-        override
+        
         payable
         ensure(deadline)
         returns (uint[] memory amounts)
@@ -752,7 +726,7 @@ contract KeenRouter is IKeenRouter02 {
     function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
         external
         virtual
-        override
+        
         ensure(deadline)
         returns (uint[] memory amounts)
     {
@@ -769,7 +743,7 @@ contract KeenRouter is IKeenRouter02 {
     function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
         external
         virtual
-        override
+        
         ensure(deadline)
         returns (uint[] memory amounts)
     {
@@ -786,7 +760,7 @@ contract KeenRouter is IKeenRouter02 {
     function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
         external
         virtual
-        override
+        
         payable
         ensure(deadline)
         returns (uint[] memory amounts)
@@ -827,7 +801,7 @@ contract KeenRouter is IKeenRouter02 {
         address[] calldata path,
         address to,
         uint deadline
-    ) external virtual override ensure(deadline) {
+    ) external virtual  ensure(deadline) {
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, KeenLibrary.pairFor(factory, path[0], path[1]), amountIn
         );
@@ -846,7 +820,7 @@ contract KeenRouter is IKeenRouter02 {
     )
         external
         virtual
-        override
+        
         payable
         ensure(deadline)
     {
@@ -870,7 +844,7 @@ contract KeenRouter is IKeenRouter02 {
     )
         external
         virtual
-        override
+        
         ensure(deadline)
     {
         require(path[path.length - 1] == WETH, 'KeenRouter: INVALID_PATH');
@@ -885,7 +859,7 @@ contract KeenRouter is IKeenRouter02 {
     }
 
     // **** LIBRARY FUNCTIONS ****
-    function quote(uint amountA, uint reserveA, uint reserveB) public pure virtual override returns (uint amountB) {
+    function quote(uint amountA, uint reserveA, uint reserveB) public pure virtual  returns (uint amountB) {
         return KeenLibrary.quote(amountA, reserveA, reserveB);
     }
 
@@ -904,7 +878,7 @@ contract KeenRouter is IKeenRouter02 {
         public
         pure
         virtual
-        override
+        
         returns (uint amountOut)
     {
         return KeenLibrary.getAmountOut(amountIn, reserveIn, reserveOut);
@@ -914,7 +888,7 @@ contract KeenRouter is IKeenRouter02 {
         public
         pure
         virtual
-        override
+        
         returns (uint amountIn)
     {
         return KeenLibrary.getAmountIn(amountOut, reserveIn, reserveOut);
@@ -924,7 +898,7 @@ contract KeenRouter is IKeenRouter02 {
         public
         view
         virtual
-        override
+        
         returns (uint[] memory amounts)
     {
         return KeenLibrary.getAmountsOut(factory, amountIn, path);
@@ -934,7 +908,7 @@ contract KeenRouter is IKeenRouter02 {
         public
         view
         virtual
-        override
+        
         returns (uint[] memory amounts)
     {
         return KeenLibrary.getAmountsIn(factory, amountOut, path);
