@@ -837,39 +837,63 @@ pragma solidity 0.5.16;
 
 
 
-contract RewardToken is ERC20, ERC20Detailed, ERC20Capped, Governable {
+contract WKEEN is ERC20, ERC20Detailed, ERC20Capped, Governable {
 
-  uint256 public constant HARD_CAP = 10 * (10 ** 6) * (10 ** 18);
+    uint256 public constant HARD_CAP = 10 * (10 ** 6) * (10 ** 18);
 
-  constructor(address _storage) public
-  ERC20Detailed("Wrapped KEEN", "WKEEN", 18)
-  ERC20Capped(HARD_CAP)
-  Governable(_storage) {
-    // msg.sender should not be a minter
-    renounceMinter();
-    // governance will become the only minter
-    _addMinter(governance());
-  }
+    IPancakeRouter public  pancakeRouter;
+
+    address public keenToken;
+    address public usdtToken;
+
+    uint256 public discount = 80;
+
+    address public usdtRecived;
+
+
+    constructor(address _storage,IPancakeRouter _pancakeRouter,address _keenToken,address _usdtToken,address _usdtRecived) public
+    ERC20Detailed("Wrapped KEEN", "WKEEN", 18)
+    ERC20Capped(HARD_CAP)
+    Governable(_storage) {
+        // msg.sender should not be a minter
+        renounceMinter();
+        // governance will become the only minter
+        _addMinter(governance());
+        pancakeRouter = _pancakeRouter;
+        keenToken = _keenToken;
+        usdtToken = _usdtToken;
+        usdtRecived = _usdtRecived;
+    }
   
 
-  /**
-  * Overrides adding new minters so that only governance can authorized them.
-  */
-  function addMinter(address _minter) public onlyGovernance {
-    super.addMinter(_minter);
-  }
+    /**
+    * Overrides adding new minters so that only governance can authorized them.
+    */
+    function addMinter(address _minter) public onlyGovernance {
+        super.addMinter(_minter);
+    }
 
-    function deposit(uint256 amount) public payable {   
+    function deposit(uint256 usdtAmount, uint256 minKeenAmount) public {
+        uint256 keenAmount = getAmountsOut(usdtAmount);
+        require(keenAmount >= minKeenAmount,"deposit: keenAmount less minKeenAmount");
         TransferHelper.safeTransferFrom(
-            _usdtAddress, msg.sender, usdtRecived, amount
+            usdtToken, msg.sender, usdtRecived, usdtAmount
         );
-        supply(msg.sender,amount);
+        supply(msg.sender,keenAmount);
+    }
+
+    function getAmountsOut(uint256 usdtAmount) public view returns(uint256){
+        address[] memory paths = new address[](2);
+        paths[0] = usdtToken;
+        paths[1] = keenToken;
+        uint256 [] memory amounts = pancakeRouter.getAmountsOut(10**18, paths);
         
+        return (usdtAmount* (10**18) / amounts[1] / discount * 100);
     }
     
 }
 
-pragma solidity 0.5.16;
+pragma solidity ^0.5.0;
 
 // helper methods for interacting with ERC20 tokens and sending ETH that do not consistently return true/false
 library TransferHelper {
@@ -891,8 +915,15 @@ library TransferHelper {
         require(success && (data.length == 0 || abi.decode(data, (bool))), 'TransferHelper: TRANSFER_FROM_FAILED');
     }
 
-    function safeTransferETH(address to, uint value) internal {
-        (bool success,) = to.call{value:value}(new bytes(0));
-        require(success, 'TransferHelper: ETH_TRANSFER_FAILED');
-    }
+
+}
+
+
+pragma solidity ^0.5.0;
+
+interface IPancakeRouter {
+
+
+    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
+    function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
 }

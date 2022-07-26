@@ -406,6 +406,8 @@ contract KeenRouter {
         _;
     }
 
+
+
     constructor(address _factory, address _WETH, address _WKEEN, address _keenUserContract, address _committeeStackHolder) public {
         factory = _factory;
         WETH = _WETH;
@@ -680,6 +682,7 @@ contract KeenRouter {
             );
         }
     }
+    
     function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,
@@ -708,71 +711,41 @@ contract KeenRouter {
         );
         _swap(amounts, path, to);
     }
-    function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
-        external
-        virtual
+    
+    // **** BET ****
+    function _bet(uint amountIn, address[] memory path, address _to,uint256 betType,uint256 betTime) internal virtual {
+        (address input, address output) = (path[0], path[1]);
+        (address token0,) = KeenLibrary.sortTokens(input, output);
+
         
-        payable
-        ensure(deadline)
-        returns (uint[] memory amounts)
-    {
-        require(path[0] == WETH, 'KeenRouter: INVALID_PATH');
-        amounts = KeenLibrary.getAmountsOut(factory, msg.value, path);
-        require(amounts[amounts.length - 1] >= amountOutMin, 'KeenRouter: INSUFFICIENT_OUTPUT_AMOUNT');
-        IWETH(WETH).deposit{value: amounts[0]}();
-        assert(IWETH(WETH).transfer(KeenLibrary.pairFor(factory, path[0], path[1]), amounts[0]));
-        _swap(amounts, path, to);
-    }
-    function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
-        external
-        virtual
         
-        ensure(deadline)
-        returns (uint[] memory amounts)
-    {
-        require(path[path.length - 1] == WETH, 'KeenRouter: INVALID_PATH');
-        amounts = KeenLibrary.getAmountsIn(factory, amountOut, path);
-        require(amounts[0] <= amountInMax, 'KeenRouter: EXCESSIVE_INPUT_AMOUNT');
-        TransferHelper.safeTransferFrom(
-            path[0], msg.sender, KeenLibrary.pairFor(factory, path[0], path[1]), amounts[0]
+        IKeenPair(KeenLibrary.pairFor(factory, input, output)).bet(
+            amountIn, to,betType,betTime
         );
-        _swap(amounts, path, address(this));
-        IWETH(WETH).withdraw(amounts[amounts.length - 1]);
-        TransferHelper.safeTransferETH(to, amounts[amounts.length - 1]);
     }
-    function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
-        external
-        virtual
-        
-        ensure(deadline)
-        returns (uint[] memory amounts)
-    {
-        require(path[path.length - 1] == WETH, 'KeenRouter: INVALID_PATH');
-        amounts = KeenLibrary.getAmountsOut(factory, amountIn, path);
-        require(amounts[amounts.length - 1] >= amountOutMin, 'KeenRouter: INSUFFICIENT_OUTPUT_AMOUNT');
+    
+    /**
+    * betType：0 is sell，1 is buy
+    * betTime: bet
+    */
+    function bet(
+        uint amountIn,
+        address[] calldata path,
+        uint256 betType,
+        uint256 betTime,
+        uint deadline
+    ) external virtual  ensure(deadline)  returns (uint[] memory amounts) {
+
+        address stackToken = KeenLibrary.getStackToken(factory, path[0], path[1]);
+        require(path[0] != stackToken,"KeenRouter: PATH_0_ERROR");
+        //bet amount summary
         TransferHelper.safeTransferFrom(
-            path[0], msg.sender, KeenLibrary.pairFor(factory, path[0], path[1]), amounts[0]
+            path[0], msg.sender, address(this), amountIn
         );
-        _swap(amounts, path, address(this));
-        IWETH(WETH).withdraw(amounts[amounts.length - 1]);
-        TransferHelper.safeTransferETH(to, amounts[amounts.length - 1]);
-    }
-    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
-        external
-        virtual
-        
-        payable
-        ensure(deadline)
-        returns (uint[] memory amounts)
-    {
-        require(path[0] == WETH, 'KeenRouter: INVALID_PATH');
-        amounts = KeenLibrary.getAmountsIn(factory, amountOut, path);
-        require(amounts[0] <= msg.value, 'KeenRouter: EXCESSIVE_INPUT_AMOUNT');
-        IWETH(WETH).deposit{value: amounts[0]}();
-        assert(IWETH(WETH).transfer(KeenLibrary.pairFor(factory, path[0], path[1]), amounts[0]));
-        _swap(amounts, path, to);
-        // refund dust eth, if any
-        if (msg.value > amounts[0]) TransferHelper.safeTransferETH(msg.sender, msg.value - amounts[0]);
+        //Input data
+        // betSummaryMap[betTime][betType] = betSummaryMap[betTime][betType]+amountIn;
+        // betAddressMap[betTime][betType][msg.sender] = betAddressMap[betTime][betType][msg.sender]+amountIn;
+        _bet(amountIn, path, msg.sender,betType,betTime);
     }
 
     // **** SWAP (supporting fee-on-transfer tokens) ****

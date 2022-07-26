@@ -290,6 +290,8 @@ contract KeenPair is IKeenPair, KeenERC20 {
 
     address public factory;
     address public stackToken;
+    address public betReceive;
+    address public betSender;
     address public token0;
     address public token1;
     address public replaceToken0;
@@ -306,6 +308,29 @@ contract KeenPair is IKeenPair, KeenERC20 {
     uint256 public companyStack;
     uint256 public committeeStack;
     uint256 public shareholderStack;
+
+    // {
+    //     betTime:{
+    //         betType:1000
+    //     }
+    // }
+    mapping (uint256 => uint256)  public  betSummaryMap;
+
+    // {
+    //     betTime:{
+    //         betType:1000
+    //     }
+    // }
+    mapping (uint256 => mapping (uint256 => uint256))  public  betTypeMap;
+
+    // {
+    //     betTime:{
+    //         betType:{
+    //             userAddress:100
+    //         }
+    //     }
+    // }
+    mapping (uint256 => mapping (uint256 => mapping (address => uint256)))  public  betAddressMap;
 
 
     uint private unlocked = 1;
@@ -345,7 +370,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
 
     // called once by the factory at time of deployment
     function initialize(address _token0, address _token1,
-    address _replaceToken0,address _replaceToken1,address _stackToken,
+    address _replaceToken0,address _replaceToken1,address _stackToken,address _betReceive,
     uint256[] calldata stackArray) external {
         require(msg.sender == factory, 'Keen: FORBIDDEN'); // sufficient check
         require(stackArray.length == 3, 'Keen: STACKARRAY_LENGTH_ERROR'); // sufficient check
@@ -354,9 +379,11 @@ contract KeenPair is IKeenPair, KeenERC20 {
         replaceToken0 = _replaceToken0;
         replaceToken1 = _replaceToken1;
         stackToken = _stackToken;
+        betReceive = _betReceive;
         companyStack = stackArray[0];
         committeeStack = stackArray[1];
         shareholderStack = stackArray[2];
+       
     }
 
     function addStack(uint256 _companyStack,uint256 _committeeStack,uint256 _shareholderStack) external {
@@ -488,7 +515,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
         if(amount1 <= tokenbalance1){
             _safeTransfer(token1, to, amount1);
         }else{
-            if(tokenbalance0 > 0){
+            if(tokenbalance1 > 0){
                 _safeTransfer(token1, to, tokenbalance1);
             }
             _safeTransfer(replaceToken1, to, amount1.sub(tokenbalance1));
@@ -582,6 +609,60 @@ contract KeenPair is IKeenPair, KeenERC20 {
 
         _update(balance0, balance1, _reserve0, _reserve1);
         emit Swap(msg.sender, amount0In, amount1In, _amount0Out, _amount1Out, to);
+    }
+
+
+    function bet(uint amountIn, address to,uint256 betType,uint256 betTime) external lock {
+        require(amountIn > 0, 'Keen: INSUFFICIENT_OUTPUT_AMOUNT');
+        require(betSummaryMap[betTime] > 0, 'Keen: BETS_NOT_STARTED');
+
+        address _betToken = token0;
+        if(_betToken == stackToken){
+            _betToken = token1;
+        }
+
+        uint256 betTotal = IERC20(_betToken).balanceOf(betReceive);
+        uint256 lastBetAmount = betTotal.sub(betSummaryMap[betTime]);
+        require(lastBetAmount >= amountIn, 'Keen: BETS_ERROR');
+
+
+        betSummaryMap[betTime] = betSummaryMap[betTime]+lastBetAmount;
+        betTypeMap[betTime][betType] = betTypeMap[betTime][betType]+lastBetAmount;
+        betAddressMap[betTime][betType][msg.sender] = betAddressMap[betTime][betType][to]+lastBetAmount;
+    }
+
+    function announce(uint256 betTime,uint256 [] calldata results) external lock {
+        require(msg.sender == factory, 'Keen: FORBIDDEN');
+        require(results.length > 0, 'Keen: RESULT_ERROR');
+        // require(betSummaryMap[betTime] > MINIMUM_LIQUIDITY, 'Keen: BETS_NOT_STARTED');
+
+
+        address _betToken = token0;
+        if(_betToken == stackToken){
+            _betToken = token1;
+        }
+
+        uint256 betTotal = IERC20(_betToken).balanceOf(betReceive);
+
+        uint256 outAmount = 0;
+        uint256 inAmount = 0;
+        for (uint256 index = 0; index < results.length; index++) {
+            uint256 result = results[index];
+            uint256 betAmount = betTypeMap[betTime][index];
+            if(result == 0){
+                inAmount = inAmount+betAmount;
+            }
+            if(result == 1){
+                outAmount = outAmount+betAmount;
+            }
+        }
+        betTotal.sub(outAmount)
+
+
+
+        // betSummaryMap[betTime] = betSummaryMap[betTime]+lastBetAmount;
+        // betTypeMap[betTime][betType] = betTypeMap[betTime][betType]+lastBetAmount;
+        // betAddressMap[betTime][betType][msg.sender] = betAddressMap[betTime][betType][to]+lastBetAmount;
     }
 
     // force balances to match reserves
