@@ -11,7 +11,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
-
+.idea
 # Mac
 *DS_Store
 

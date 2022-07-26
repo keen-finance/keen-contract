@@ -58,7 +58,7 @@ interface IKeenRouter01 {
         address to,
         uint deadline
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-    
+
     function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,
@@ -263,10 +263,9 @@ library KeenLibrary {
                 hex'ff',
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
-                hex'23d69c6195341fef78742aae1957f436d9055f869be31a6d6e8877faa254226e' // init code hash
+                hex'3e0baf80eecd520d5869a9d64f6c228f72e32bd8492821b412bc5805544596a6' // init code hash
             ))));
     }
-
 
     // fetches and sorts the reserves for a pair
     function getReserves(address factory, address tokenA, address tokenB) internal view returns (uint reserveA, uint reserveB) {
@@ -275,7 +274,7 @@ library KeenLibrary {
         (uint reserve0, uint reserve1,) = IKeenPair(pairFor(factory, tokenA, tokenB)).getReserves();
         (reserveA, reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
     }
-    
+
     // fetches stackToken
     function getStackToken(address factory, address tokenA, address tokenB) internal view returns (address stackToken) {
         pairFor(factory, tokenA, tokenB);
@@ -385,7 +384,7 @@ interface IKeenUser{
 // File: contracts\KeenRouter.sol
 pragma solidity =0.6.6;
 
-
+import "hardhat/console.sol";
 
 
 
@@ -429,9 +428,9 @@ contract KeenRouter {
         uint amountAMin,
         uint amountBMin
     ) internal virtual returns (uint amountA, uint amountB) {
-        // require the pair exist 
+        // require the pair exist
         require(IKeenFactory(factory).getPair(tokenA, tokenB) != address(0), 'KeenRouter: PAIR_NOT_EXIST');
-        
+
         (uint reserveA, uint reserveB) = KeenLibrary.getReserves(factory, tokenA, tokenB);
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
@@ -450,6 +449,29 @@ contract KeenRouter {
     }
 
     // **** company ****
+    function addCompanyLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external virtual  ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
+        address _tokenA = tokenA;                                // gas savings
+        address _tokenB = tokenB;
+        (amountA, amountB) = _addLiquidity(_tokenA, _tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
+        address pair = KeenLibrary.pairFor(factory, _tokenA, _tokenB);
+
+        require(IKeenUser(keenUserContract).containsStackUser(1, to), 'KeenRouter: MUST_IS_COMPANY');
+        console.log("msg.sender:", msg.sender);
+        TransferHelper.safeTransferFrom(_tokenA, msg.sender, pair, amountA);
+        TransferHelper.safeTransferFrom(_tokenB, msg.sender, pair, amountB);
+
+        liquidity = IKeenPair(pair).mint(to,1);
+    }
+
     function addCompanyLiquidityByReplaceToken(
         address tokenA,
         address tokenB,
@@ -464,7 +486,7 @@ contract KeenRouter {
         address _tokenB = tokenB;
         (amountA, amountB) = _addLiquidity(_tokenA, _tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
         address pair = KeenLibrary.pairFor(factory, _tokenA, _tokenB);
-        
+
         require(IKeenUser(keenUserContract).containsStackUser(1, to), 'KeenRouter: MUST_IS_COMPANY');
         (address token0,) = KeenLibrary.sortTokens(_tokenA, _tokenB);
 
@@ -487,7 +509,7 @@ contract KeenRouter {
         }
         TransferHelper.safeTransferFrom(_tokenA, msg.sender, pair, amountA);
         TransferHelper.safeTransferFrom(_tokenB, msg.sender, pair, amountB);
-        
+
         liquidity = IKeenPair(pair).mint(to,1);
     }
 
@@ -530,7 +552,7 @@ contract KeenRouter {
         if(!isCommittee){
             IKeenUser(keenUserContract).createStackUser(to,2,parent);
         }
-        
+
         liquidity = IKeenPair(pair).mint(to,2);
     }
 
@@ -682,7 +704,7 @@ contract KeenRouter {
             );
         }
     }
-    
+
     function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,
@@ -711,19 +733,19 @@ contract KeenRouter {
         );
         _swap(amounts, path, to);
     }
-    
+
     // **** BET ****
     function _bet(uint amountIn, address[] memory path, address _to,uint256 betType,uint256 betTime) internal virtual {
         (address input, address output) = (path[0], path[1]);
         (address token0,) = KeenLibrary.sortTokens(input, output);
 
-        
-        
+
+
         IKeenPair(KeenLibrary.pairFor(factory, input, output)).bet(
             amountIn, to,betType,betTime
         );
     }
-    
+
     /**
     * betType：0 is sell，1 is buy
     * betTime: bet
@@ -793,7 +815,7 @@ contract KeenRouter {
     )
         external
         virtual
-        
+
         payable
         ensure(deadline)
     {
@@ -817,7 +839,7 @@ contract KeenRouter {
     )
         external
         virtual
-        
+
         ensure(deadline)
     {
         require(path[path.length - 1] == WETH, 'KeenRouter: INVALID_PATH');
@@ -836,7 +858,7 @@ contract KeenRouter {
         return KeenLibrary.quote(amountA, reserveA, reserveB);
     }
 
-        
+
     function getReserves(address addressA, address addressB) public  virtual view returns (uint reserve0, uint reserve1) {
         (uint reserve0A, uint reserve1A) = KeenLibrary.getReserves(factory,addressA, addressB);
         reserve0 = reserve0A;
@@ -851,7 +873,7 @@ contract KeenRouter {
         public
         pure
         virtual
-        
+
         returns (uint amountOut)
     {
         return KeenLibrary.getAmountOut(amountIn, reserveIn, reserveOut);
@@ -861,7 +883,7 @@ contract KeenRouter {
         public
         pure
         virtual
-        
+
         returns (uint amountIn)
     {
         return KeenLibrary.getAmountIn(amountOut, reserveIn, reserveOut);
@@ -871,7 +893,7 @@ contract KeenRouter {
         public
         view
         virtual
-        
+
         returns (uint[] memory amounts)
     {
         return KeenLibrary.getAmountsOut(factory, amountIn, path);
@@ -881,7 +903,7 @@ contract KeenRouter {
         public
         view
         virtual
-        
+
         returns (uint[] memory amounts)
     {
         return KeenLibrary.getAmountsIn(factory, amountOut, path);

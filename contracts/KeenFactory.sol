@@ -383,7 +383,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
         companyStack = stackArray[0];
         committeeStack = stackArray[1];
         shareholderStack = stackArray[2];
-       
+
     }
 
     function addStack(uint256 _companyStack,uint256 _committeeStack,uint256 _shareholderStack) external {
@@ -478,9 +478,9 @@ contract KeenPair is IKeenPair, KeenERC20 {
 
     // this low-level function should be called from a contract which performs important safety checks
     function burn(address to,uint stackType) external lock returns (uint amount0, uint amount1) {
-        
-        (uint112 _reserve0, uint112 _reserve1,) = getReserves(); 
-                                      
+
+        (uint112 _reserve0, uint112 _reserve1,) = getReserves();
+
         uint tokenbalance0 = IERC20(token0).balanceOf(address(this));
         uint balance0 = tokenbalance0;
         if(replaceToken0 != address(0)){
@@ -520,7 +520,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
             }
             _safeTransfer(replaceToken1, to, amount1.sub(tokenbalance1));
         }
-        
+
         balance0 = IERC20(token0).balanceOf(address(this));
         if(replaceToken0 != address(0)){
             balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
@@ -587,7 +587,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
                 }
                 _safeTransfer(replaceToken1, to, _amount1Out.sub(balance1));
             }
-        } 
+        }
         if (data.length > 0) IKeenCallee(to).keenCall(msg.sender, _amount0Out, _amount1Out, data);
         balance0 = IERC20(_token0).balanceOf(address(this));
         if(replaceToken0 != address(0)){
@@ -715,7 +715,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
             }
             _safeTransfer(replaceToken1, to, amount1.sub(tokenbalance1));
         }
-        
+
     }
 
     // force reserves to match balances
@@ -751,7 +751,7 @@ contract KeenFactory is IKeenFactory {
     uint256 public companyStackRatio = 20;
     uint256 public committeeStackRatio = 30;
     uint256 public shareholderStackRatio = 50;
-    
+
 
     function allPairsLength() external view returns (uint) {
         return allPairs.length;
@@ -768,12 +768,12 @@ contract KeenFactory is IKeenFactory {
         require(token0 != address(0), 'Keen: ZERO_ADDRESS');
         require(getPair[token0][token1] == address(0), 'Keen: PAIR_EXISTS'); // single check is sufficient
         bytes memory bytecode = type(KeenPair).creationCode;
-        bytes32 salt = keccak256(abi.encodePacked(token0, token1,replaceToken0,replaceToken1));
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
         assembly {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
-        
-        
+
+
         IKeenPair(pair).initialize(token0, token1,replaceToken0,replaceToken1,stackToken,calculateStackArray(maxStake));
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair; // populate mapping in the reverse direction

@@ -70,3 +70,5 @@ export type { RewardToken } from "./contracts/RewardToken.sol/RewardToken";
 export { RewardToken__factory } from "./factories/contracts/RewardToken.sol/RewardToken__factory";
 export type { WBNB } from "./contracts/WBNB";
 export { WBNB__factory } from "./factories/contracts/WBNB__factory";
+export type { WKEEN } from "./contracts/WKEEN.sol/WKEEN";
+export { WKEEN__factory } from "./factories/contracts/WKEEN.sol/WKEEN__factory";

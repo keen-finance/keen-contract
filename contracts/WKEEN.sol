@@ -864,7 +864,7 @@ contract WKEEN is ERC20, ERC20Detailed, ERC20Capped, Governable {
         usdtToken = _usdtToken;
         usdtRecived = _usdtRecived;
     }
-  
+
 
     /**
     * Overrides adding new minters so that only governance can authorized them.
@@ -887,10 +887,10 @@ contract WKEEN is ERC20, ERC20Detailed, ERC20Capped, Governable {
         paths[0] = usdtToken;
         paths[1] = keenToken;
         uint256 [] memory amounts = pancakeRouter.getAmountsOut(10**18, paths);
-        
+
         return (usdtAmount* (10**18) / amounts[1] / discount * 100);
     }
-    
+
 }
 
 pragma solidity ^0.5.0;
