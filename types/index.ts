@@ -24,6 +24,10 @@ export type { ERC165 } from "./@openzeppelin/contracts/utils/introspection/ERC16
 export { ERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/ERC165__factory";
 export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC165";
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
+export type { IKeenConfig } from "./contracts/KeenConfig.sol/IKeenConfig";
+export { IKeenConfig__factory } from "./factories/contracts/KeenConfig.sol/IKeenConfig__factory";
+export type { KeenConfig } from "./contracts/KeenConfig.sol/KeenConfig";
+export { KeenConfig__factory } from "./factories/contracts/KeenConfig.sol/KeenConfig__factory";
 export type { IKeenCallee } from "./contracts/KeenFactory.sol/IKeenCallee";
 export { IKeenCallee__factory } from "./factories/contracts/KeenFactory.sol/IKeenCallee__factory";
 export type { IKeenERC20 } from "./contracts/KeenFactory.sol/IKeenERC20";
@@ -70,5 +74,7 @@ export type { RewardToken } from "./contracts/RewardToken.sol/RewardToken";
 export { RewardToken__factory } from "./factories/contracts/RewardToken.sol/RewardToken__factory";
 export type { WBNB } from "./contracts/WBNB";
 export { WBNB__factory } from "./factories/contracts/WBNB__factory";
+export type { IPancakeRouter } from "./contracts/WKEEN.sol/IPancakeRouter";
+export { IPancakeRouter__factory } from "./factories/contracts/WKEEN.sol/IPancakeRouter__factory";
 export type { WKEEN } from "./contracts/WKEEN.sol/WKEEN";
 export { WKEEN__factory } from "./factories/contracts/WKEEN.sol/WKEEN__factory";

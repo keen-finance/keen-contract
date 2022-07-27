@@ -234,10 +234,12 @@ interface IKeenPair {
     function mint(address to,uint stackType) external returns (uint liquidity);
     function burn(address to,uint stackType) external returns (uint amount0, uint amount1);
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+    function bet(uint amountIn, address to,uint256 betType,uint256 betTime) external;
+    function announce(uint256 betTime,uint256 [] calldata results) external;
     function skim(address to) external;
     function sync() external;
 
-    function initialize(address, address) external;
+    function initialize(address, address,address,address,address,address,address,uint256[]calldata,uint256[]calldata) external;
 }
 
 // File: contracts\libraries\KeenLibrary.sol
@@ -734,17 +736,7 @@ contract KeenRouter {
         _swap(amounts, path, to);
     }
 
-    // **** BET ****
-    function _bet(uint amountIn, address[] memory path, address _to,uint256 betType,uint256 betTime) internal virtual {
-        (address input, address output) = (path[0], path[1]);
-        (address token0,) = KeenLibrary.sortTokens(input, output);
-
-
-
-        IKeenPair(KeenLibrary.pairFor(factory, input, output)).bet(
-            amountIn, to,betType,betTime
-        );
-    }
+    
 
     /**
     * betType：0 is sell，1 is buy
@@ -756,7 +748,8 @@ contract KeenRouter {
         uint256 betType,
         uint256 betTime,
         uint deadline
-    ) external virtual  ensure(deadline)  returns (uint[] memory amounts) {
+    ) external virtual  ensure(deadline){
+
 
         address stackToken = KeenLibrary.getStackToken(factory, path[0], path[1]);
         require(path[0] != stackToken,"KeenRouter: PATH_0_ERROR");
@@ -767,7 +760,12 @@ contract KeenRouter {
         //Input data
         // betSummaryMap[betTime][betType] = betSummaryMap[betTime][betType]+amountIn;
         // betAddressMap[betTime][betType][msg.sender] = betAddressMap[betTime][betType][msg.sender]+amountIn;
-        _bet(amountIn, path, msg.sender,betType,betTime);
+        IKeenPair(KeenLibrary.pairFor(factory, path[0], path[1])).bet(
+            amountIn, msg.sender,betType,betTime
+        );
+        //Calculate commission
+        
+
     }
 
     // **** SWAP (supporting fee-on-transfer tokens) ****

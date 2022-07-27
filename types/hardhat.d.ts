@@ -49,6 +49,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "IKeenConfig",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IKeenConfig__factory>;
+    getContractFactory(
+      name: "KeenConfig",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.KeenConfig__factory>;
+    getContractFactory(
       name: "IERC20",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC20__factory>;
@@ -56,6 +64,10 @@ declare module "hardhat/types/runtime" {
       name: "IKeenCallee",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IKeenCallee__factory>;
+    getContractFactory(
+      name: "IKeenConfig",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IKeenConfig__factory>;
     getContractFactory(
       name: "IKeenERC20",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -197,6 +209,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC20__factory>;
     getContractFactory(
+      name: "IPancakeRouter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IPancakeRouter__factory>;
+    getContractFactory(
       name: "MinterRole",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MinterRole__factory>;
@@ -255,6 +271,16 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
+      name: "IKeenConfig",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IKeenConfig>;
+    getContractAt(
+      name: "KeenConfig",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.KeenConfig>;
+    getContractAt(
       name: "IERC20",
       address: string,
       signer?: ethers.Signer
@@ -264,6 +290,11 @@ declare module "hardhat/types/runtime" {
       address: string,
       signer?: ethers.Signer
     ): Promise<Contracts.IKeenCallee>;
+    getContractAt(
+      name: "IKeenConfig",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IKeenConfig>;
     getContractAt(
       name: "IKeenERC20",
       address: string,
@@ -439,6 +470,11 @@ declare module "hardhat/types/runtime" {
       address: string,
       signer?: ethers.Signer
     ): Promise<Contracts.IERC20>;
+    getContractAt(
+      name: "IPancakeRouter",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IPancakeRouter>;
     getContractAt(
       name: "MinterRole",
       address: string,
