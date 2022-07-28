@@ -39,6 +39,10 @@ interface IKeenConfig{
 
     function betMintFactor(address _pair) external view returns(uint256);
 
+    function setBetMintMax(address _pair,uint256 _factor) external;
+
+    function betMintMax(address _pair) external view returns(uint256);
+
 }
 
 
@@ -68,6 +72,8 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     uint256[] private inviteRates = [10,6,5,4,3,2,1,1,1,1];
 
     mapping(address => uint256) public betMintFactor;
+
+    mapping(address => uint256) public betMintMax;
 
     constructor(address _betReceive,address _betSender) {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -128,6 +134,11 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     function setBetMintFactor(address _pair,uint256 _factor) external {
         require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         betMintFactor[_pair] = _factor;
+    }
+
+    function setBetMintMax(address _pair,uint256 _max) external {
+        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        betMintMax[_pair] = _max;
     }
  
 }

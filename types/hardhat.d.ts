@@ -49,6 +49,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "DateTime",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DateTime__factory>;
+    getContractFactory(
       name: "IKeenConfig",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IKeenConfig__factory>;
@@ -124,6 +128,22 @@ declare module "hardhat/types/runtime" {
       name: "KeenRouter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.KeenRouter__factory>;
+    getContractFactory(
+      name: "DateTimeAPI",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DateTimeAPI__factory>;
+    getContractFactory(
+      name: "IERC20",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC20__factory>;
+    getContractFactory(
+      name: "IKeenConfig",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IKeenConfig__factory>;
+    getContractFactory(
+      name: "IKeenPair",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IKeenPair__factory>;
     getContractFactory(
       name: "IKeenUser",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -271,6 +291,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
+      name: "DateTime",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DateTime>;
+    getContractAt(
       name: "IKeenConfig",
       address: string,
       signer?: ethers.Signer
@@ -365,6 +390,26 @@ declare module "hardhat/types/runtime" {
       address: string,
       signer?: ethers.Signer
     ): Promise<Contracts.KeenRouter>;
+    getContractAt(
+      name: "DateTimeAPI",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DateTimeAPI>;
+    getContractAt(
+      name: "IERC20",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC20>;
+    getContractAt(
+      name: "IKeenConfig",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IKeenConfig>;
+    getContractAt(
+      name: "IKeenPair",
+      address: string,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IKeenPair>;
     getContractAt(
       name: "IKeenUser",
       address: string,

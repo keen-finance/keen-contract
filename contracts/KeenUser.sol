@@ -18,24 +18,32 @@ contract KeenUser is Context,AccessControlEnumerable{
     bytes32 public constant UPDATE_ROLE = keccak256("UPDATE_ROLE");
     bytes32 public constant DELETE_ROLE = keccak256("DELETE_ROLE");
 
+    uint256 public constant DAY_SECONDS = 60*60*24;
+
     TcpPosition public immutable tcpPosition;
 
     address public keenRouter;
 
     address public keenConfig;
+
+
+    DateTimeAPI public dateTimeAPI = DateTimeAPI(address(this));
     
     
 
     mapping(address => address) public userParents;
 
     
-    mapping(uint256 =>EnumerableMap.AddressToUintMap) private stackTypeMap;
+    mapping(uint256 => EnumerableMap.AddressToUintMap) private stackTypeMap;
 
+    //user => (date => reward)
+    mapping(address => mapping(uint256 => uint256)) public userDateRewardMap;
 
-    mapping(address => uint256) public pairBetReward;
+    //pari =>  reward
+    mapping(address => uint256) public pairRewardMap;
 
     //pari => (user => amount)
-    mapping(address => EnumerableMap.AddressToUintMap) public userBetTotal;
+    // mapping(address => mapping(address => uint256)) public pariUserTotal;
 
 
     constructor(address _tcpPosition,address _keenRouter,address _keenConfig) {
@@ -90,24 +98,61 @@ contract KeenUser is Context,AccessControlEnumerable{
         }
     }
 
-    function calculateBet(address pair,uint256 amount,address to) external {
+    function calculateBetReward(address pair,uint256 amount,address to) external {
         require(_msgSender() == keenRouter, "KeenUser: must is keenRouter to calculateBet");
         
-        userBetTotal[pair].set(to,userBetTotal[pair].get(to).add(amount));
+        uint256 factor = IKeenConfig(keenConfig).betMintFactor(pair);
+        if(factor == 0){
+            return;            
+        }
+        uint256 max = IKeenConfig(keenConfig).betMintMax(pair);
+
+        uint256 tomorrow = dateTimeAPI.beginOfDay(uint16(block.timestamp+DAY_SECONDS));
 
         //self
-        uint256 factor = IKeenConfig(keenConfig).betMintFactor(pair);
+        uint256 reward = amount.mul(factor).div(100);
 
+        uint256 _reward = rewardToUser(pair,to,reward,max,tomorrow);
+        if(reward != _reward){
+            return;
+        }
         // parent
         uint256[] memory inviteRates = IKeenConfig(keenConfig).getInviteRates();
+        address currentParent = to;
+        for (uint256 index = 0; index < inviteRates.length; index++) {
+            currentParent = getParentAddress(currentParent);
+            if(currentParent == address(0)){
+                break;
+            }
+            bool flag = false;
+            if(containsStackUser(1,currentParent) || containsStackUser(2,currentParent)){
+                flag = true;
+            }else if(containsStackUser(3,currentParent) && index < 3){
+                flag = true;
+            }
+            if(!flag){
+                continue;
+            }
+            uint256 _rate = inviteRates[index];
+            uint256 parentReward = _reward.mul(_rate).div(100);
 
+            uint256 _parentReward = rewardToUser(pair,currentParent,parentReward,max,tomorrow);
+            if(parentReward != _parentReward){
+                break;
+            }
+        }
+    }
 
-
-
-
-
-
-
+    function rewardToUser(address pair,address to,uint256 reward,uint256 max,uint256 date) private returns (uint256 _reward){
+        uint256 pairReward = pairRewardMap[pair];
+        if(pairReward >= max){
+            _reward =  0;
+        }else{
+            uint256 remain = max.sub(pairReward);
+            _reward = remain >= reward ? reward : remain;
+            userDateRewardMap[to][date] = userDateRewardMap[to][date].add(_reward);
+            pairRewardMap[pair] = pairRewardMap[pair].add(_reward);
+        }
     }
 
 
@@ -117,8 +162,12 @@ contract KeenUser is Context,AccessControlEnumerable{
 
 interface IKeenUser{
     function getParentAddress(address userAddress) external view returns (address parentAddress);
-    function updateUser(address _user,uint _stackType,address parent)external;
+    function createStackUser(address _user,uint _stackType,address parent) external;
+    function deleteStackUser(address _user,uint _stackType,address parent) external;
     function userInfos(address _user)external view returns (address parent,uint stackType);
+    function calculateBetReward(address pair,uint256 amount,address to) external;
+    function containsStackUser(uint256 _stackType,address _user) external view returns (bool);
+    
 }
 
 
@@ -158,6 +207,11 @@ interface IKeenConfig{
     function setBetMintFactor(address _pair,uint256 _factor) external;
 
     function betMintFactor(address _pair) external view returns(uint256);
+
+
+    function setBetMintMax(address _pair,uint256 _factor) external;
+
+    function betMintMax(address _pair) external view returns(uint256);
 
 }
 
@@ -231,5 +285,22 @@ interface IERC20 {
     function approve(address spender, uint value) external returns (bool);
     function transfer(address to, uint value) external returns (bool);
     function transferFrom(address from, address to, uint value) external returns (bool);
-    function supply(address account, uint256 amount) public returns (bool);
+    function supply(address account, uint256 amount) external returns (bool);
+}
+
+interface DateTimeAPI {
+        /*
+         *  Abstract contract for interfacing with the DateTime contract.
+         *
+         */
+        function isLeapYear(uint16 year) external returns (bool);
+        function getYear(uint timestamp) external returns (uint16);
+        function getMonth(uint timestamp) external returns (uint8);
+        function getDay(uint timestamp) external returns (uint8);
+        function getHour(uint timestamp) external returns (uint8);
+        function getMinute(uint timestamp) external returns (uint8);
+        function getSecond(uint timestamp) external returns (uint8);
+        function getWeekday(uint timestamp) external returns (uint8);
+        function beginOfDay(uint16 timestamp) external returns (uint);
+        function toTimestamp(uint16 year, uint8 month, uint8 day) external returns (uint );
 }

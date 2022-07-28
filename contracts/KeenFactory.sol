@@ -38,6 +38,8 @@ interface IKeenFactory {
     function addStack(address tokenA, address tokenB,uint256 _stack) external ;
 
     function keenConfig() external view returns (address);
+
+    function betResultMap(uint256) external view returns (uint256 [] memory);
 }
 
 interface IKeenPair {
@@ -87,7 +89,7 @@ interface IKeenPair {
 
     function mint(address to,uint stackType) external returns (uint liquidity);
     function burn(address to,uint stackType) external returns (uint amount0, uint amount1);
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+    function accept(address to,uint256 betTime) external returns(uint256 outAmount);
     function bet(uint amountIn, address to,uint256 betType,uint256 betTime) external;
     function announce(uint256 betTime,uint256 [] calldata results) external;
     function skim(address to,uint stackType) external;
@@ -316,6 +318,26 @@ interface IKeenConfig{
 
     function betMintFactor(address _pair) external view returns(uint256);
 
+    function setBetMintMax(address _pair,uint256 _factor) external;
+
+    function betMintMax(address _pair) external view returns(uint256);
+
+}
+interface DateTimeAPI {
+        /*
+         *  Abstract contract for interfacing with the DateTime contract.
+         *
+         */
+        function isLeapYear(uint16 year) external returns (bool);
+        function getYear(uint timestamp) external returns (uint16);
+        function getMonth(uint timestamp) external returns (uint8);
+        function getDay(uint timestamp) external returns (uint8);
+        function getHour(uint timestamp) external returns (uint8);
+        function getMinute(uint timestamp) external returns (uint8);
+        function getSecond(uint timestamp) external returns (uint8);
+        function getWeekday(uint timestamp) external returns (uint8);
+        function beginOfDay(uint16 timestamp) external returns (uint);
+        function toTimestamp(uint16 year, uint8 month, uint8 day) external returns (uint );
 }
 
 contract KeenPair is IKeenPair, KeenERC20 {
@@ -345,7 +367,6 @@ contract KeenPair is IKeenPair, KeenERC20 {
     uint256 public committeeStack;
     uint256 public shareholderStack;
 
-    uint256 private betTotal;
     //betType:0-sell,1-buy
     //result:0-,1-win,2-lose
     //betTime ==> betType ==> result
@@ -354,10 +375,18 @@ contract KeenPair is IKeenPair, KeenERC20 {
     mapping (uint256 => uint256)  public  betSummaryMap;
     //betTime ==> (betType ==> amount)
     mapping (uint256 => uint256[])  public  betTypeMap;
+    //betTime ==> (betType ==> amount)
+    mapping (uint256 => mapping (address => uint256))  public  acceptAmountMap;
     //betTime ==> (betType ==> (address ==> amount))
     mapping (uint256 => mapping (address => uint256)[])  public  betAddressMap;
 
-
+    //user ==> freedTime[]
+    mapping (address => uint256[])  public  committeeFreedTime;
+    //user ==> (freedTime => Liquidity)
+    mapping (address => mapping (uint256 => uint256))  public  committeeFreedLiquidity;
+    DateTimeAPI public dateTimeAPI = DateTimeAPI(address(this));
+    uint256 public constant DAY_SECONDS = 60*60*24;
+    uint256 public constant MONTH_SECONDS = DAY_SECONDS * 30;
     uint private unlocked = 1;
     modifier lock() {
         require(unlocked == 1, 'Keen: LOCKED');
@@ -474,14 +503,14 @@ contract KeenPair is IKeenPair, KeenERC20 {
             stackAmount = amount1;
         }
         if(stackType == 1){
+            require(companyStack >= stackAmount, 'Keen: INSUFFICIENT_STACK');
             companyStack = companyStack.sub(stackAmount);
-            require(companyStack >= 0, 'Keen: INSUFFICIENT_STACK');
         }else if(stackType == 2){
+            require(committeeStack >= stackAmount, 'Keen: INSUFFICIENT_STACK');
             committeeStack = companyStack.sub(stackAmount);
-            require(committeeStack >= 0, 'Keen: INSUFFICIENT_STACK');
         }else if(stackType == 3){
+            require(shareholderStack >= stackAmount, 'Keen: INSUFFICIENT_STACK');
             shareholderStack = shareholderStack.sub(stackAmount);
-            require(shareholderStack >= 0, 'Keen: INSUFFICIENT_STACK');
         }
         bool feeOn = _mintFee(_reserve0, _reserve1);
         uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
@@ -493,7 +522,24 @@ contract KeenPair is IKeenPair, KeenERC20 {
         }
         require(liquidity > 0, 'Keen: INSUFFICIENT_LIQUIDITY_MINTED');
         _mint(to, liquidity);
+        if(stackType == 2){
+            //Divide the funds into n shares, start from the nth month, and start releasing n shares in sequence
+            //todo  should get from KeenConfig IKeenConfig ikeenConfig = IKeenConfig(IKeenFactory(factory).keenConfig());
+            uint256 freedTimes = 10;
+            uint256 divLiquidity = liquidity.div(freedTimes);
+            //todo  should get from KeenConfig 
+            uint256 startTime = dateTimeAPI.beginOfDay(uint16(block.timestamp+MONTH_SECONDS*3));
+            //todo  should get from KeenConfig
+            uint256 intervalTime = MONTH_SECONDS;
+            
+            for (uint256 index = 0; index < freedTimes; index++) {
 
+                committeeFreedTime[to].push(startTime);
+                committeeFreedLiquidity[to][startTime] = divLiquidity;
+
+            }
+            
+        }
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint(reserve0).mul(reserve1); // reserve0 and reserve1 are up-to-date
         emit Mint(msg.sender, amount0, amount1);
@@ -574,64 +620,34 @@ contract KeenPair is IKeenPair, KeenERC20 {
         }
     }
 
-    // this low-level function should be called from a contract which performs important safety checks
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external lock {
-        uint _amount0Out = amount0Out;
-        uint _amount1Out = amount1Out;
-        require(_amount0Out > 0 || _amount1Out > 0, 'Keen: INSUFFICIENT_OUTPUT_AMOUNT');
-        (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
-        require(_amount0Out < _reserve0 && _amount1Out < _reserve1, 'Keen: INSUFFICIENT_LIQUIDITY');
 
-        address _token0 = token0;                                // gas savings
-        address _token1 = token1;
 
-        uint balance0 = IERC20(_token0).balanceOf(address(this));
-        uint balance1 = IERC20(_token1).balanceOf(address(this));
-        { // scope for _token{0,1}, avoids stack too deep errors
-        require(to != _token0 && to != _token1, 'Keen: INVALID_TO');
-        if (_amount0Out > 0){
-            // optimistically transfer tokens
-            if(_amount0Out <= balance0){
-                _safeTransfer(_token0, to, _amount0Out);
-            }else{
-                if(balance0 > 0){
-                    _safeTransfer(_token0, to, balance0);
-                }
-                _safeTransfer(replaceToken0, to, _amount0Out.sub(balance0));
+    function accept(address to,uint256 betTime) external lock returns(uint256 outAmount){
+        require(acceptAmountMap[betTime][to] == 0, 'Keen: BETTIME_ACCEPTED');
+        address _betToken = token0;
+        if(_betToken == stackToken){
+            _betToken = token1;
+        }
+        uint256[] memory results = IKeenFactory(factory).betResultMap(betTime);
+
+        IKeenConfig ikeenConfig = IKeenConfig(IKeenFactory(factory).keenConfig());
+        
+        uint256[] memory betOdds = ikeenConfig.getBetOdds();
+        
+        for (uint256 index = 0; index < results.length; index++) {
+            uint256 betAmount = betAddressMap[betTime][index][to];
+            if(betAmount == 0){
+                continue;
+            }
+            uint256 result = results[index];
+            uint256 oods = betOdds[index];
+            if(result == 1 && oods > 0){
+                outAmount = outAmount + betAmount.mul(oods).div(100);
             }
         }
-        if (_amount1Out > 0){
-            // optimistically transfer tokens
-            if(_amount1Out <= balance1){
-                _safeTransfer(_token1, to, _amount1Out);
-            }else{
-                if(balance1 > 0){
-                    _safeTransfer(_token1, to, balance1);
-                }
-                _safeTransfer(replaceToken1, to, _amount1Out.sub(balance1));
-            }
-        }
-        if (data.length > 0) IKeenCallee(to).keenCall(msg.sender, _amount0Out, _amount1Out, data);
-        balance0 = IERC20(_token0).balanceOf(address(this));
-        if(replaceToken0 != address(0)){
-            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
-        }
-        balance1 = IERC20(_token1).balanceOf(address(this));
-        if(replaceToken1 != address(0)){
-            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
-        }
-        }
-        uint amount0In = balance0 > _reserve0 - _amount0Out ? balance0 - (_reserve0 - _amount0Out) : 0;
-        uint amount1In = balance1 > _reserve1 - _amount1Out ? balance1 - (_reserve1 - _amount1Out) : 0;
-        require(amount0In > 0 || amount1In > 0, 'Keen: INSUFFICIENT_INPUT_AMOUNT');
-        { // scope for reserve{0,1}Adjusted, avoids stack too deep errors
-        uint balance0Adjusted = (balance0.mul(10000).sub(amount0In.mul(25)));
-        uint balance1Adjusted = (balance1.mul(10000).sub(amount1In.mul(25)));
-        require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1).mul(10000**2), 'Keen: K');
-        }
-
-        _update(balance0, balance1, _reserve0, _reserve1);
-        emit Swap(msg.sender, amount0In, amount1In, _amount0Out, _amount1Out, to);
+        require(outAmount > 0, 'Keen: OUTAMOUNT_ERROR');
+        IERC20(_betToken).transferFrom(ikeenConfig.betSender(), to, outAmount);
+        acceptAmountMap[betTime][to] = outAmount;
     }
 
 
@@ -645,14 +661,14 @@ contract KeenPair is IKeenPair, KeenERC20 {
         if(_betToken == stackToken){
             _betToken = token1;
         }
-        uint256 betTotal = IERC20(_betToken).balanceOf(IKeenConfig(_keenConfig).betReceive());
-        uint256 lastBetAmount = betTotal.sub(betSummaryMap[betTime]);
+        uint256 _betTotal = IERC20(_betToken).balanceOf(IKeenConfig(_keenConfig).betReceive());
+        uint256 lastBetAmount = _betTotal.sub(betSummaryMap[betTime]);
         require(lastBetAmount >= amountIn, 'Keen: BETS_ERROR');
 
-        betTotal += lastBetAmount;
+        
         betSummaryMap[betTime] = betSummaryMap[betTime]+lastBetAmount;
         betTypeMap[betTime][betType] = betTypeMap[betTime][betType]+lastBetAmount;
-        betAddressMap[betTime][betType][msg.sender] = betAddressMap[betTime][betType][to]+lastBetAmount;
+        betAddressMap[betTime][betType][to] = betAddressMap[betTime][betType][to]+lastBetAmount;
         emit Bet(msg.sender, amountIn, betType, betTime, to);
     }
     //Announce results
@@ -816,7 +832,7 @@ contract KeenFactory is IKeenFactory {
         return allPairs.length;
     }
 
-    function createPair(address tokenA, address tokenB,address replaceTokenA,address replaceTokenB,address stackToken,uint256 maxStake,uint256 betMintFactor) external returns (address pair) {
+    function createPair(address tokenA, address tokenB,address replaceTokenA,address replaceTokenB,address stackToken,uint256 maxStake,uint256 betMintFactor,uint256 betMintMax) external returns (address pair) {
         require(msg.sender == feeToSetter, 'Keen: FORBIDDEN');
         require(tokenA != tokenB, 'Keen: IDENTICAL_ADDRESSES');
         require(replaceTokenA == address(0) || replaceTokenB == address(0), 'Keen: require replaceTokenA or replaceTokenB is zero');
@@ -837,6 +853,9 @@ contract KeenFactory is IKeenFactory {
         allPairs.push(pair);
         if(betMintFactor > 0){
             IKeenConfig(keenConfig).setBetMintFactor(pair,betMintFactor);
+        }
+        if(betMintMax > 0){
+            IKeenConfig(keenConfig).setBetMintMax(pair,betMintMax);
         }
         emit PairCreated(token0, token1, pair, allPairs.length);
     }
@@ -861,7 +880,7 @@ contract KeenFactory is IKeenFactory {
         return arrays;
     }
 
-    function calculateStack(uint256 maxStake,uint256 ratio) public view returns(uint256){
+    function calculateStack(uint256 maxStake,uint256 ratio) public pure returns(uint256){
         return maxStake.mul(ratio).div(10**2);
     }
 
