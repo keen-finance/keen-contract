@@ -43,6 +43,38 @@ interface IKeenConfig{
 
     function betMintMax(address _pair) external view returns(uint256);
 
+    function committeeFreedTimes() external view returns(uint256 time);
+
+    function setCommitteeFreedTimes(uint _committeeFreedTimes) external;
+
+    function committeeIntervalTime() external view returns(uint256 time);
+
+    function setCommitteeIntervalTime(uint _committeeIntervalTime) external;
+
+    function committeeFreedStartTime() external view returns(uint time);
+
+    function currentCommitteeFreedStartTime() external view returns(uint);
+
+    function setCommitteeFreedStartTime(uint _committeeFreedStartTime) external;
+
+    
+}
+
+interface DateTimeAPI {
+        /*
+         *  Abstract contract for interfacing with the DateTime contract.
+         *
+         */
+        function isLeapYear(uint year) external pure returns (bool);
+        function getYear(uint timestamp) external pure returns (uint);
+        function getMonth(uint timestamp) external pure returns (uint);
+        function getDay(uint timestamp) external pure returns (uint);
+        function getHour(uint timestamp) external pure returns (uint);
+        function getMinute(uint timestamp) external pure returns (uint);
+        function getSecond(uint timestamp) external pure returns (uint);
+        function getWeekday(uint timestamp) external pure returns (uint);
+        function beginOfDay(uint timestamp) external pure returns (uint);
+        function toTimestamp(uint year, uint month, uint day) external pure returns (uint );
 }
 
 
@@ -51,9 +83,11 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
 	using SafeMath for uint256;
 	// using SafeERC20 for IERC20;
 
-    bytes32 public constant CREATE_ROLE = keccak256("CREATE_ROLE");
     bytes32 public constant UPDATE_ROLE = keccak256("UPDATE_ROLE");
-    bytes32 public constant DELETE_ROLE = keccak256("DELETE_ROLE");
+    uint256 public constant DAY_SECONDS = 60 * 60 * 24;
+    uint256 public constant MONTH_SECONDS = DAY_SECONDS * 30;
+
+    DateTimeAPI public immutable dateTimeAPI = DateTimeAPI(address(this));
 
     //[buy,sell]
     uint256[] private betOdds = [195,195];
@@ -71,21 +105,27 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
 
     uint256[] private inviteRates = [10,6,5,4,3,2,1,1,1,1];
 
+    //committee config
+    uint256 public committeeFreedTimes = 10;
+    uint public committeeIntervalTime = MONTH_SECONDS;
+    uint public committeeFreedStartTime = MONTH_SECONDS*3;
+
+
+
+
     mapping(address => uint256) public betMintFactor;
 
     mapping(address => uint256) public betMintMax;
 
     constructor(address _betReceive,address _betSender) {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _setupRole(CREATE_ROLE, _msgSender());
         _setupRole(UPDATE_ROLE, _msgSender());
-        _setupRole(DELETE_ROLE, _msgSender());
         betReceive = _betReceive;
         betSender = _betSender;
     }
 
     function setStackRatios(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require(hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         companyStackRatio = _companyStackRatio;
         committeeStackRatio = _committeeStackRatio;
         shareholderStackRatio = _shareholderStackRatio;
@@ -99,7 +139,7 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     }
 
     function setBetOdds(uint256 [] calldata _betOdds) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         betOdds = _betOdds;
     }
 
@@ -108,17 +148,17 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     }
 
     function setBetReceive(address _betReceive) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         betReceive = _betReceive;
     }
 
     function setBetSender(address _betSender) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         betSender = _betSender;
     }
 
     function setBetInterval(uint256 _betInterval) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         betInterval = _betInterval;
     }
 
@@ -127,18 +167,39 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     }
 
     function setInviteRates(uint256 [] calldata _inviteRates) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         inviteRates = _inviteRates;
     }
 
     function setBetMintFactor(address _pair,uint256 _factor) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         betMintFactor[_pair] = _factor;
     }
 
     function setBetMintMax(address _pair,uint256 _max) external {
-        require(hasRole(CREATE_ROLE, _msgSender()) || hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         betMintMax[_pair] = _max;
+    }
+
+
+    function setCommitteeFreedTimes(uint256 _committeeFreedTimes) external {
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        committeeFreedTimes = _committeeFreedTimes;
+    }
+
+    function setCommitteeIntervalTime(uint _committeeIntervalTime) external {
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        committeeIntervalTime = _committeeIntervalTime;
+    }
+
+    function setCommitteeFreedStartTime(uint _committeeFreedStartTime) external {
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        committeeFreedStartTime = _committeeFreedStartTime;
+    }
+
+    function currentCommitteeFreedStartTime() public view returns(uint){
+        uint time =  block.timestamp+committeeFreedStartTime;
+        return dateTimeAPI.beginOfDay(time);
     }
  
 }

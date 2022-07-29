@@ -26,6 +26,8 @@ export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
 export type { DateTime } from "./contracts/DateTime";
 export { DateTime__factory } from "./factories/contracts/DateTime__factory";
+export type { DateTimeAPI } from "./contracts/KeenConfig.sol/DateTimeAPI";
+export { DateTimeAPI__factory } from "./factories/contracts/KeenConfig.sol/DateTimeAPI__factory";
 export type { IKeenConfig } from "./contracts/KeenConfig.sol/IKeenConfig";
 export { IKeenConfig__factory } from "./factories/contracts/KeenConfig.sol/IKeenConfig__factory";
 export type { KeenConfig } from "./contracts/KeenConfig.sol/KeenConfig";
@@ -54,8 +56,6 @@ export type { IWETH } from "./contracts/KeenRouter.sol/IWETH";
 export { IWETH__factory } from "./factories/contracts/KeenRouter.sol/IWETH__factory";
 export type { KeenRouter } from "./contracts/KeenRouter.sol/KeenRouter";
 export { KeenRouter__factory } from "./factories/contracts/KeenRouter.sol/KeenRouter__factory";
-export type { DateTimeAPI } from "./contracts/KeenUser.sol/DateTimeAPI";
-export { DateTimeAPI__factory } from "./factories/contracts/KeenUser.sol/DateTimeAPI__factory";
 export type { KeenUser } from "./contracts/KeenUser.sol/KeenUser";
 export { KeenUser__factory } from "./factories/contracts/KeenUser.sol/KeenUser__factory";
 export type { TcpPosition } from "./contracts/KeenUser.sol/TcpPosition";

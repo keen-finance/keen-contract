@@ -293,14 +293,14 @@ interface DateTimeAPI {
          *  Abstract contract for interfacing with the DateTime contract.
          *
          */
-        function isLeapYear(uint16 year) external returns (bool);
-        function getYear(uint timestamp) external returns (uint16);
-        function getMonth(uint timestamp) external returns (uint8);
-        function getDay(uint timestamp) external returns (uint8);
-        function getHour(uint timestamp) external returns (uint8);
-        function getMinute(uint timestamp) external returns (uint8);
-        function getSecond(uint timestamp) external returns (uint8);
-        function getWeekday(uint timestamp) external returns (uint8);
-        function beginOfDay(uint16 timestamp) external returns (uint);
-        function toTimestamp(uint16 year, uint8 month, uint8 day) external returns (uint );
+        function isLeapYear(uint year) external pure returns (bool);
+        function getYear(uint timestamp) external pure returns (uint);
+        function getMonth(uint timestamp) external pure returns (uint);
+        function getDay(uint timestamp) external pure returns (uint);
+        function getHour(uint timestamp) external pure returns (uint);
+        function getMinute(uint timestamp) external pure returns (uint);
+        function getSecond(uint timestamp) external pure returns (uint);
+        function getWeekday(uint timestamp) external pure returns (uint);
+        function beginOfDay(uint timestamp) external pure returns (uint);
+        function toTimestamp(uint year, uint month, uint day) external pure returns (uint );
 }

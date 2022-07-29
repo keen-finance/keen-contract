@@ -322,23 +322,23 @@ interface IKeenConfig{
 
     function betMintMax(address _pair) external view returns(uint256);
 
+    function committeeFreedTimes() external view returns(uint256 time);
+
+    function setCommitteeFreedTimes(uint256 _committeeFreedTimes) external;
+
+    function committeeIntervalTime() external view returns(uint256 time);
+
+    function setCommitteeIntervalTime(uint256 _committeeIntervalTime) external;
+
+    function committeeFreedStartTime() external view returns(uint256 time);
+
+    function currentCommitteeFreedStartTime() external view returns(uint256 time);
+
+    function setCommitteeFreedStartTime(uint256 _committeeFreedStartTime) external;
+
+    
 }
-interface DateTimeAPI {
-        /*
-         *  Abstract contract for interfacing with the DateTime contract.
-         *
-         */
-        function isLeapYear(uint16 year) external returns (bool);
-        function getYear(uint timestamp) external returns (uint16);
-        function getMonth(uint timestamp) external returns (uint8);
-        function getDay(uint timestamp) external returns (uint8);
-        function getHour(uint timestamp) external returns (uint8);
-        function getMinute(uint timestamp) external returns (uint8);
-        function getSecond(uint timestamp) external returns (uint8);
-        function getWeekday(uint timestamp) external returns (uint8);
-        function beginOfDay(uint16 timestamp) external returns (uint);
-        function toTimestamp(uint16 year, uint8 month, uint8 day) external returns (uint );
-}
+
 
 contract KeenPair is IKeenPair, KeenERC20 {
     using SafeMath  for uint;
@@ -384,9 +384,8 @@ contract KeenPair is IKeenPair, KeenERC20 {
     mapping (address => uint256[])  public  committeeFreedTime;
     //user ==> (freedTime => Liquidity)
     mapping (address => mapping (uint256 => uint256))  public  committeeFreedLiquidity;
-    DateTimeAPI public dateTimeAPI = DateTimeAPI(address(this));
-    uint256 public constant DAY_SECONDS = 60*60*24;
-    uint256 public constant MONTH_SECONDS = DAY_SECONDS * 30;
+    
+    
     uint private unlocked = 1;
     modifier lock() {
         require(unlocked == 1, 'Keen: LOCKED');
@@ -522,27 +521,78 @@ contract KeenPair is IKeenPair, KeenERC20 {
         }
         require(liquidity > 0, 'Keen: INSUFFICIENT_LIQUIDITY_MINTED');
         _mint(to, liquidity);
-        if(stackType == 2){
-            //Divide the funds into n shares, start from the nth month, and start releasing n shares in sequence
-            //todo  should get from KeenConfig IKeenConfig ikeenConfig = IKeenConfig(IKeenFactory(factory).keenConfig());
-            uint256 freedTimes = 10;
-            uint256 divLiquidity = liquidity.div(freedTimes);
-            //todo  should get from KeenConfig 
-            uint256 startTime = dateTimeAPI.beginOfDay(uint16(block.timestamp+MONTH_SECONDS*3));
-            //todo  should get from KeenConfig
-            uint256 intervalTime = MONTH_SECONDS;
-            
-            for (uint256 index = 0; index < freedTimes; index++) {
 
-                committeeFreedTime[to].push(startTime);
-                committeeFreedLiquidity[to][startTime] = divLiquidity;
-
-            }
-            
-        }
+        if(stackType == 2) _freezeLiquidity(to,liquidity);
+        
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint(reserve0).mul(reserve1); // reserve0 and reserve1 are up-to-date
         emit Mint(msg.sender, amount0, amount1);
+    }
+
+    function _freezeLiquidity(address to, uint value) private{
+        //Divide the funds into n shares, start from the nth month, and start releasing n shares in sequence
+        IKeenConfig ikeenConfig = IKeenConfig(IKeenFactory(factory).keenConfig());
+        uint256 freedTimes = ikeenConfig.committeeFreedTimes();
+        if(freedTimes == 0){
+            return;
+        }
+        uint256 divLiquidity = value.div(freedTimes);
+        uint startTime = ikeenConfig.currentCommitteeFreedStartTime();
+        uint intervalTime = ikeenConfig.committeeIntervalTime();
+        if(intervalTime == 0 || freedTimes == 1){
+            committeeFreedTime[to].push(startTime);
+            committeeFreedLiquidity[to][startTime] = value;
+        }else{
+            for (uint256 index = 0; index < freedTimes; index++) {
+                committeeFreedTime[to].push(startTime+intervalTime*index);
+                committeeFreedLiquidity[to][startTime+intervalTime*index] = committeeFreedLiquidity[to][startTime+intervalTime*index]+divLiquidity;
+            }
+        }
+    }
+
+
+    function getFreezeLiquidity(address to) public view returns (uint256){
+        if(committeeFreedTime[to].length == 0){
+            return 0;
+        }
+        uint256 freezeLiquidity = 0;
+        for (uint256 index = 0; index < committeeFreedTime[to].length; index++) {
+            uint256 time = committeeFreedTime[to][index];
+            if(time < block.timestamp){
+                continue;
+            }
+            freezeLiquidity+=committeeFreedLiquidity[to][time];
+        }
+        return freezeLiquidity;
+    }
+
+    function _subFreezeLiquidity(address to,uint256 liquidity) private returns (uint256){
+        if(committeeFreedTime[to].length == 0){
+            return 0;
+        }
+        uint256 subFreezeLiquidity = 0;
+        for (uint256 index = 0; index < committeeFreedTime[to].length; index++) {
+            if(liquidity == 0){
+                break;
+            }
+            uint256 time = committeeFreedTime[to][index];
+            if(time >= block.timestamp){
+                continue;
+            }
+            uint256 currentLiquidity = committeeFreedLiquidity[to][time];
+            if(currentLiquidity == 0){
+                continue;
+            }
+            uint256 currentSub = currentLiquidity > liquidity ? liquidity : currentLiquidity;
+            subFreezeLiquidity += currentSub;
+            committeeFreedLiquidity[to][time] -= currentLiquidity.sub(currentSub);
+            liquidity -= currentSub;
+            
+            if(committeeFreedLiquidity[to][time] == 0){
+                committeeFreedTime[to][index] = 0;
+            }
+        }
+        return subFreezeLiquidity;
     }
 
     // this low-level function should be called from a contract which performs important safety checks
@@ -562,6 +612,8 @@ contract KeenPair is IKeenPair, KeenERC20 {
         }
         uint liquidity = balanceOf[address(this)];
 
+        require(balanceOf[to] >= getFreezeLiquidity(to),'KeenPair: FREEZE_LIQUIDITY_ERROR'); 
+
         bool feeOn = _mintFee(_reserve0, _reserve1);
         uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
         amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution
@@ -569,8 +621,11 @@ contract KeenPair is IKeenPair, KeenERC20 {
         require(amount0 > 0 && amount1 > 0, 'Keen: INSUFFICIENT_LIQUIDITY_BURNED');
 
         _addStack(amount0,amount1,stackType);
+        
 
         _burn(address(this), liquidity);
+
+        require(stackType != 2 || _subFreezeLiquidity(to,liquidity) == liquidity,'KeenPair: FREEZE_LIQUIDITY_ERROR'); 
 
         if(amount0 <= tokenbalance0){
             _safeTransfer(token0, to, amount0);
