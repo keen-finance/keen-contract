@@ -57,6 +57,9 @@ interface IKeenConfig{
 
     function setCommitteeFreedStartTime(uint _committeeFreedStartTime) external;
 
+    function committeeMinStack() external view returns(uint);
+    
+    function setCommitteeMinStack(uint _committeeMinStack) external;
     
 }
 
@@ -87,7 +90,7 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     uint256 public constant DAY_SECONDS = 60 * 60 * 24;
     uint256 public constant MONTH_SECONDS = DAY_SECONDS * 30;
 
-    DateTimeAPI public immutable dateTimeAPI = DateTimeAPI(address(this));
+    DateTimeAPI public dateTimeAPI;
 
     //[buy,sell]
     uint256[] private betOdds = [195,195];
@@ -109,6 +112,7 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     uint256 public committeeFreedTimes = 10;
     uint public committeeIntervalTime = MONTH_SECONDS;
     uint public committeeFreedStartTime = MONTH_SECONDS*3;
+    uint256 public committeeMinStack = 5000*(10**18);
 
 
 
@@ -117,11 +121,12 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
 
     mapping(address => uint256) public betMintMax;
 
-    constructor(address _betReceive,address _betSender) {
+    constructor(address _betReceive,address _betSender,address _dateTimeAPI) {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(UPDATE_ROLE, _msgSender());
         betReceive = _betReceive;
         betSender = _betSender;
+        dateTimeAPI = DateTimeAPI(_dateTimeAPI);
     }
 
     function setStackRatios(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external {
@@ -201,6 +206,12 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
         uint time =  block.timestamp+committeeFreedStartTime;
         return dateTimeAPI.beginOfDay(time);
     }
+
+    function setCommitteeMinStack(uint _committeeMinStack) external{
+        require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
+        committeeMinStack = _committeeMinStack;
+    }
+
  
 }
 

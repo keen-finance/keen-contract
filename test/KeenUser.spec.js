@@ -41,15 +41,14 @@ describe('KeenUser', function () {
     fromUser = { from: accounts[deployer] }
 
     tcpPosition = "0x77d34de33a75ac2a772f8C47080c0232Cbff463B"
-
-    keenUserContract = await KeenUser.new(tcpPosition)
+    //address _tcpPosition,address _keenRouter,address _keenConfig,address _dateTimeAPI,address _keenToken
+    keenUserContract = await KeenUser.new(tcpPosition,"0x0000000000000000000000000000000000000000","0x0000000000000000000000000000000000000000","0x0000000000000000000000000000000000000000")
   })
 
   describe('initialize', function () {
     it('should be initialized with correct values', async function () {
-      const contract = await KeenUser.new(tcpPosition)
-
-      const hasRole = await contract.hasRole("0x00",deployer)
+      
+      const hasRole = await keenUserContract.hasRole("0x00",deployer)
       
       expect(hasRole).to.be.equal(true)
     })

@@ -12,6 +12,7 @@ contract KeenUser is Context,AccessControlEnumerable{
     using Address for address;
 	using SafeMath for uint256;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
+    using EnumerableMap for EnumerableMap.UintToUintMap;
 	// using SafeERC20 for IERC20;
 
     bytes32 public constant CREATE_ROLE = keccak256("CREATE_ROLE");
@@ -20,16 +21,16 @@ contract KeenUser is Context,AccessControlEnumerable{
 
     uint256 public constant DAY_SECONDS = 60*60*24;
 
-    TcpPosition public immutable tcpPosition;
+    TcpPosition public tcpPosition;
+
+    DateTimeAPI public dateTimeAPI;
+    
 
     address public keenRouter;
 
-    address public keenConfig;
+    address public keenConfig;   
 
-
-    DateTimeAPI public dateTimeAPI = DateTimeAPI(address(this));
-    
-    
+    address public keenToken; 
 
     mapping(address => address) public userParents;
 
@@ -37,24 +38,21 @@ contract KeenUser is Context,AccessControlEnumerable{
     mapping(uint256 => EnumerableMap.AddressToUintMap) private stackTypeMap;
 
     //user => (date => reward)
-    mapping(address => mapping(uint256 => uint256)) public userDateRewardMap;
+    mapping(address => EnumerableMap.UintToUintMap) private userDateRewardMap;
 
     //pari =>  reward
     mapping(address => uint256) public pairRewardMap;
 
-    //pari => (user => amount)
-    // mapping(address => mapping(address => uint256)) public pariUserTotal;
 
-
-    constructor(address _tcpPosition,address _keenRouter,address _keenConfig) {
+    constructor(address _tcpPosition,address _keenConfig,address _dateTimeAPI,address _keenToken) {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(CREATE_ROLE, _msgSender());
         _setupRole(UPDATE_ROLE, _msgSender());
         _setupRole(DELETE_ROLE, _msgSender());
         tcpPosition = TcpPosition(_tcpPosition);
-        keenRouter = _keenRouter;
+        dateTimeAPI = DateTimeAPI(_dateTimeAPI);
         keenConfig = _keenConfig;
-
+        keenToken = _keenToken;
     }
 
 
@@ -110,7 +108,7 @@ contract KeenUser is Context,AccessControlEnumerable{
         uint256 tomorrow = dateTimeAPI.beginOfDay(uint16(block.timestamp+DAY_SECONDS));
 
         //self
-        uint256 reward = amount.mul(factor).div(100);
+        uint256 reward = amount.mul(factor).div(1000);
 
         uint256 _reward = rewardToUser(pair,to,reward,max,tomorrow);
         if(reward != _reward){
@@ -150,12 +148,64 @@ contract KeenUser is Context,AccessControlEnumerable{
         }else{
             uint256 remain = max.sub(pairReward);
             _reward = remain >= reward ? reward : remain;
-            userDateRewardMap[to][date] = userDateRewardMap[to][date].add(_reward);
+            userDateRewardMap[to].set(date,_reward.add(userDateRewardMap[to].get(date)));
             pairRewardMap[pair] = pairRewardMap[pair].add(_reward);
         }
     }
 
+    function pendingReward(address to) public view returns (uint256 _reward){
+        for (uint256 index = 0; index < userDateRewardMap[to].length(); index++) {
+            (uint256 key,uint256 value)  = userDateRewardMap[to].at(index);
+            if(key <= block.timestamp){
+                _reward += value;
+            }
+        }
+    }
 
+    function harvest() public returns (uint256 _reward){
+        address to = msg.sender;
+        uint256 [] memory harvestKeys = new uint256[](userDateRewardMap[to].length());
+        for (uint256 index = 0; index < userDateRewardMap[to].length(); index++) {
+            (uint256 key, uint256 value) = userDateRewardMap[to].at(index);
+            if(key <= block.timestamp){
+                _reward += value;
+                harvestKeys[index] = key;
+            }
+        }
+        
+        require(_reward != 0, "KeenUser: reward must not eq zero");
+        IERC20(keenToken).supply(to, _reward);
+        for (uint256 index = 0; index < harvestKeys.length; index++) {
+            if(harvestKeys[index] != 0){
+                userDateRewardMap[to].remove(harvestKeys[index]);
+            }
+        }
+    }
+
+    function updateKeenRouter(address _keenRouter) external {
+        require(hasRole(UPDATE_ROLE, _msgSender()), "KeenUser: must have update role to updateKeenRouter");
+        keenRouter = _keenRouter;
+    }
+
+    function updateTcpPosition(address _tcpPosition) external {
+        require(hasRole(UPDATE_ROLE, _msgSender()), "KeenUser: must have update role to updateTcpPosition");
+        tcpPosition = TcpPosition(_tcpPosition);
+    }
+
+    function updateKeenConfig(address _keenConfig) external {
+        require(hasRole(UPDATE_ROLE, _msgSender()), "KeenUser: must have update role to updateKeenConfig");
+        keenConfig = _keenConfig;
+    }
+
+    function updateDateTimeAPI(address _dateTimeAPI) external {
+        require(hasRole(UPDATE_ROLE, _msgSender()), "KeenUser: must have update role to updateDateTimeAPI");
+        dateTimeAPI = DateTimeAPI(_dateTimeAPI);
+    }
+
+    function updateKeenToken(address _keenToken) external {
+        require(hasRole(UPDATE_ROLE, _msgSender()), "KeenUser: must have update role to updateKeenToken");
+        keenToken = _keenToken;
+    }
 
     
 }

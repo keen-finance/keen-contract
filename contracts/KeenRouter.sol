@@ -265,7 +265,7 @@ library KeenLibrary {
                 hex'ff',
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
-                hex'3e0baf80eecd520d5869a9d64f6c228f72e32bd8492821b412bc5805544596a6' // init code hash
+                hex'15f3b7ee9f2a44cfd3ce84436139a473b8be070839d02f87522760e73d552b12' // init code hash
             ))));
     }
 
@@ -532,10 +532,11 @@ contract KeenRouter {
     ) external virtual  ensure(deadline) returns (uint amountA, uint amountB, uint liquidity) {
         address _tokenA = tokenA;                                // gas savings
         address _tokenB = tokenB;
+        
         (amountA, amountB) = _addLiquidity(_tokenA, _tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
         address pair = KeenLibrary.pairFor(factory, _tokenA, _tokenB);
 
-        if(!isWKEEN){
+        if(isWKEEN){
             address stackToken = KeenLibrary.getStackToken(factory, _tokenA, _tokenB);
             if(stackToken == _tokenA){
                 //tokenB is usdt

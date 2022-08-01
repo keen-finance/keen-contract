@@ -3,6 +3,10 @@ const RewardToken = artifacts.require('RewardToken')
 const KeenFactory = artifacts.require('KeenFactory')
 const KeenPair = artifacts.require('KeenPair')
 
+const KeenConfig = artifacts.require('KeenConfig')
+const DateTime = artifacts.require('DateTime')
+
+
 const BN = web3.utils.BN
 const expect = require('chai').use(require('bn-chai')(BN)).expect
 const domain = 'KeenFactory'
@@ -28,11 +32,15 @@ describe('KeenFactory', function () {
   let fromUser
 
 
+  let betReceive
+
+  let betSender
   // Contracts
   let tokenA
   let tokenB
 
   let keenFactoryContract
+  let keenConfigContract
 
   beforeEach(async function () {
     // Create Listing environment
@@ -44,6 +52,10 @@ describe('KeenFactory', function () {
 
     deployer = accounts[0]
 
+    betReceive = accounts[9]
+
+    betSender = accounts[10]
+
     fromUser = { from: accounts[deployer] }
 
     tokenA = await RewardToken.new(deployer)
@@ -51,23 +63,29 @@ describe('KeenFactory', function () {
     tokenB = await RewardToken.new(deployer)
     await tokenB.supply(user,web3.utils.toWei('100000', 'ether'))
 
-    keenFactoryContract = await KeenFactory.new(deployer)
+    let dateTime = await DateTime.new();
+    keenConfigContract = await KeenConfig.new(betReceive,betSender,dateTime.address);
+
+    keenFactoryContract = await KeenFactory.new(deployer,keenConfigContract.address);
 
   })
 
   describe('initialize', function () {
     it('should be initialized with correct values', async function () {
-      const contract = await KeenFactory.new(deployer)
+      
 
-      const feeToSetter = await contract.feeToSetter()
+      const feeToSetter = await keenFactoryContract.feeToSetter()
       
       expect(feeToSetter).to.be.equal(deployer)
+
+      const keenConfig = await keenFactoryContract.keenConfig()
+      expect(keenConfig).to.be.equal(keenConfigContract.address)
     })
   })
 
   describe('createPair', function () {
     it('should be createPair with correct values', async function () {
-      let {logs} = await keenFactoryContract.createPair(tokenA.address, tokenB.address,zero,zero,tokenB.address,web3.utils.toWei('2000000', 'ether'))
+      let {logs} = await keenFactoryContract.createPair([tokenA.address, tokenB.address],[zero,zero],web3.utils.toWei('2000000', 'ether'))
       let pair = await keenFactoryContract.getPair(tokenA.address, tokenB.address);
       console.log("pair:",pair)
       let keenPair = await KeenPair.at(pair)
@@ -80,7 +98,7 @@ describe('KeenFactory', function () {
 
   describe('addStack', function () {
     it('should be createPair with correct values', async function () {
-      let {logs} = await keenFactoryContract.createPair(tokenA.address, tokenB.address,zero,zero,tokenB.address,web3.utils.toWei('2000000', 'ether'))
+      let {logs} = await keenFactoryContract.createPair([tokenA.address, tokenB.address],[zero,zero],web3.utils.toWei('2000000', 'ether'))
       let pair = await keenFactoryContract.getPair(tokenA.address, tokenB.address);
       console.log("pair:",pair)
       console.log("allStack:",web3.utils.toWei('2000000', 'ether').toString())
