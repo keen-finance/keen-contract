@@ -240,6 +240,9 @@ interface IKeenPair {
     function sync() external;
     function addStack(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external;
     function initialize(address, address,address,address,address,uint256[]calldata) external;
+    function getStackTokenBalance(address to) external view returns (uint256);
+    function getFreezeLiquidity(address to) external view returns (uint256);
+    function getUnfreezeLiquidity(address to) external view returns (uint256);
 }
 
 // File: contracts\libraries\KeenLibrary.sol
@@ -265,7 +268,7 @@ library KeenLibrary {
                 hex'ff',
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
-                hex'15f3b7ee9f2a44cfd3ce84436139a473b8be070839d02f87522760e73d552b12' // init code hash
+                hex'aff369cd863ead4f3b14d4f6f4ddd39b6f724f87e378d4c848a9df1ace7ef07a' // init code hash
             ))));
     }
 
@@ -553,12 +556,8 @@ contract KeenRouter {
             TransferHelper.safeTransferFrom(_tokenA, msg.sender, pair, amountA);
             TransferHelper.safeTransferFrom(_tokenB, msg.sender, pair, amountB);
         }
-        bool isCommittee = IKeenUser(keenUserContract).containsStackUser(2, to);
-        if(!isCommittee){
-            IKeenUser(keenUserContract).createStackUser(to,2,parent);
-        }
-
         liquidity = IKeenPair(pair).mint(to,2);
+        _updateStackType(pair,to,2,parent);
     }
 
 
@@ -579,12 +578,19 @@ contract KeenRouter {
 
         TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
         TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
-
-        bool isShareholders = IKeenUser(keenUserContract).containsStackUser(3, to);
-        if(!isShareholders){
-            IKeenUser(keenUserContract).createStackUser(to,3,parent);
-        }
         liquidity = IKeenPair(pair).mint(to,3);
+        _updateStackType(pair,to,3,parent);
+    }
+
+    function _updateStackType(address pair,address to,uint256 stackType,address parent) private {
+        bool isStackUser = IKeenUser(keenUserContract).containsStackUser(stackType, to);
+        uint256 stackTokenBalance = IKeenPair(pair).getStackTokenBalance(to);
+        if(isStackUser && stackTokenBalance < 100*(10**18)){
+            IKeenUser(keenUserContract).deleteStackUser(to,stackType,parent);
+        }
+        if(!isStackUser && stackTokenBalance >= 100*(10**18)){
+            IKeenUser(keenUserContract).createStackUser(to,stackType,parent);
+        }
     }
 
     function removeLiquidity(
@@ -604,9 +610,7 @@ contract KeenRouter {
         (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
         require(amountA >= amountAMin, 'KeenRouter: INSUFFICIENT_A_AMOUNT');
         require(amountB >= amountBMin, 'KeenRouter: INSUFFICIENT_B_AMOUNT');
-        if(IKeenPair(pair).balanceOf(msg.sender) < 100){
-            IKeenUser(keenUserContract).deleteStackUser(msg.sender,stackType,address(0));
-        }
+        _updateStackType(pair,to,stackType,address(0));
     }
 
 

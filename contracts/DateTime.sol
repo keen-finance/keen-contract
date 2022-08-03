@@ -154,7 +154,7 @@ contract DateTime {
                 return uint8((timestamp / DAY_IN_SECONDS + 4) % 7);
         }
 
-        function beginOfDay(uint16 timestamp) public pure returns (uint) {
+        function beginOfDay(uint timestamp) public pure returns (uint) {
                 return toTimestamp(getYear(timestamp), getMonth(timestamp), getDay(timestamp));
         }
 

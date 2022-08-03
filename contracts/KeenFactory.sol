@@ -101,6 +101,10 @@ interface IKeenPair {
     function sync() external;
     function addStack(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external;
     function initialize(address, address,address,address,address,uint256[]calldata) external;
+    function getStackTokenBalance(address to) external view returns (uint256);
+    function getFreezeLiquidity(address to) external view returns (uint256);
+    function getUnfreezeLiquidity(address to) external view returns (uint256);
+    
 }
 
 interface IKeenERC20 {
@@ -342,9 +346,9 @@ interface IKeenConfig{
     function setCommitteeFreedStartTime(uint256 _committeeFreedStartTime) external;
 
 
-    function committeeMinStack() external view returns(uint);
+    function committeeMinStack() external view returns(uint256);
     
-    function setCommitteeMinStack(uint _committeeMinStack) external;
+    function setCommitteeMinStack(uint256 _committeeMinStack) external;
 
     
 }
@@ -513,8 +517,8 @@ contract KeenPair is IKeenPair, KeenERC20 {
             companyStack = companyStack.sub(stackAmount);
         }else if(stackType == 2){
             require(committeeStack >= stackAmount, 'Keen: INSUFFICIENT_STACK');
-            require(stackAmount >= IKeenConfig(IKeenFactory(factory).keenConfig()).committeeMinStack(), 'Keen: INSUFFICIENT_STACK');
-            committeeStack = companyStack.sub(stackAmount);
+            require(stackAmount >= IKeenConfig(IKeenFactory(factory).keenConfig()).committeeMinStack(), 'Keen: TO_MIN_STACK');
+            committeeStack = committeeStack.sub(stackAmount);
         }else if(stackType == 3){
             require(shareholderStack >= stackAmount, 'Keen: INSUFFICIENT_STACK');
             shareholderStack = shareholderStack.sub(stackAmount);
@@ -545,38 +549,25 @@ contract KeenPair is IKeenPair, KeenERC20 {
             return;
         }
         uint256 divLiquidity = value.div(freedTimes);
-        uint startTime = ikeenConfig.currentCommitteeFreedStartTime();
-        uint intervalTime = ikeenConfig.committeeIntervalTime();
+        uint256 startTime = ikeenConfig.currentCommitteeFreedStartTime();
+        uint256 intervalTime = ikeenConfig.committeeIntervalTime();
         if(intervalTime == 0 || freedTimes == 1){
             committeeFreedTime[to].push(startTime);
             committeeFreedLiquidity[to][startTime] = value;
         }else{
             for (uint256 index = 0; index < freedTimes; index++) {
                 committeeFreedTime[to].push(startTime+intervalTime*index);
-                committeeFreedLiquidity[to][startTime+intervalTime*index] = committeeFreedLiquidity[to][startTime+intervalTime*index]+divLiquidity;
+                committeeFreedLiquidity[to][startTime+intervalTime*index] = divLiquidity;
             }
         }
     }
 
 
-    function getFreezeLiquidity(address to) public view returns (uint256){
-        if(committeeFreedTime[to].length == 0){
-            return 0;
-        }
-        uint256 freezeLiquidity = 0;
-        for (uint256 index = 0; index < committeeFreedTime[to].length; index++) {
-            uint256 time = committeeFreedTime[to][index];
-            if(time < block.timestamp){
-                continue;
-            }
-            freezeLiquidity+=committeeFreedLiquidity[to][time];
-        }
-        return freezeLiquidity;
-    }
+
 
     function _subFreezeLiquidity(address to,uint256 liquidity) private returns (uint256){
-        if(committeeFreedTime[to].length == 0){
-            return 0;
+        if(getFreezeLiquidity(to) == 0){
+            return liquidity;
         }
         uint256 subFreezeLiquidity = 0;
         for (uint256 index = 0; index < committeeFreedTime[to].length; index++) {
@@ -624,7 +615,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
         uint _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
-        amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution
+        amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution  
         amount1 = liquidity.mul(balance1) / _totalSupply; // using balances ensures pro-rata distribution
         require(amount0 > 0 && amount1 > 0, 'Keen: INSUFFICIENT_LIQUIDITY_BURNED');
 
@@ -661,7 +652,6 @@ contract KeenPair is IKeenPair, KeenERC20 {
         if(replaceToken1 != address(0)){
             balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
         }
-
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint(reserve0).mul(reserve1); // reserve0 and reserve1 are up-to-date
         emit Burn(msg.sender, amount0, amount1, to);
@@ -860,6 +850,48 @@ contract KeenPair is IKeenPair, KeenERC20 {
             balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
         }
         _update(balance0, balance1, reserve0, reserve1);
+    }
+
+    function getStackTokenBalance(address to) public view returns (uint256){
+        uint256 _totalSupply = totalSupply;
+        uint balance0 = IERC20(token0).balanceOf(address(this));
+        if(replaceToken0 != address(0)){
+            balance0 = balance0.add(IERC20(replaceToken0).balanceOf(address(this)));
+        }
+        uint balance1 = IERC20(token1).balanceOf(address(this));
+        if(replaceToken1 != address(0)){
+            balance1 = balance1.add(IERC20(replaceToken1).balanceOf(address(this)));
+        }
+        uint256 balanceTo = balanceOf[to];
+        return stackToken == token0 ? balanceTo.mul(balance0) / _totalSupply : balanceTo.mul(balance1) / _totalSupply;
+    }
+
+    function getFreezeLiquidity(address to) public view returns (uint256){
+        if(committeeFreedTime[to].length == 0){
+            return 0;
+        }
+        uint256 freezeLiquidity = 0;
+        for (uint256 index = 0; index < committeeFreedTime[to].length; index++) {
+            uint256 time = committeeFreedTime[to][index];
+            if(time >= block.timestamp){
+                freezeLiquidity+=committeeFreedLiquidity[to][time];
+            }
+        }
+        return freezeLiquidity;
+    }
+
+    function getUnfreezeLiquidity(address to) public view returns (uint256){
+        if(committeeFreedTime[to].length == 0){
+            return 0;
+        }
+        uint256 freezeLiquidity = 0;
+        for (uint256 index = 0; index < committeeFreedTime[to].length; index++) {
+            uint256 time = committeeFreedTime[to][index];
+            if(time < block.timestamp){
+                freezeLiquidity+=committeeFreedLiquidity[to][time];
+            }
+        }
+        return freezeLiquidity;
     }
 }
 

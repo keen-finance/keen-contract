@@ -126,14 +126,15 @@ module.exports = {
           },
         },
       },
-    ],
+    ]
   },
   networks: {
     hardhat: {
       chainId: 1337,
       blockGasLimit: 10000000,
       gas: 10000000,
-      initialBaseFeePerGas: 0
+      initialBaseFeePerGas: 0,
+      allowUnlimitedContractSize:true
     },
     local: {
       url: 'http://127.0.0.1:8545',

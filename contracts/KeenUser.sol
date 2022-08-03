@@ -319,6 +319,9 @@ interface IKeenPair {
     function sync() external;
     function addStack(uint256 _companyStackRatio,uint256 _committeeStackRatio,uint256 _shareholderStackRatio) external;
     function initialize(address, address,address,address,address,uint256[]calldata) external;
+    function getStackTokenBalance(address to) external view returns (uint256);
+    function getFreezeLiquidity(address to) external view returns (uint256);
+    function getUnfreezeLiquidity(address to) external view returns (uint256);
 }
 
 interface IERC20 {

@@ -45,21 +45,21 @@ interface IKeenConfig{
 
     function committeeFreedTimes() external view returns(uint256 time);
 
-    function setCommitteeFreedTimes(uint _committeeFreedTimes) external;
+    function setCommitteeFreedTimes(uint256 _committeeFreedTimes) external;
 
     function committeeIntervalTime() external view returns(uint256 time);
 
-    function setCommitteeIntervalTime(uint _committeeIntervalTime) external;
+    function setCommitteeIntervalTime(uint256 _committeeIntervalTime) external;
 
-    function committeeFreedStartTime() external view returns(uint time);
+    function committeeFreedStartTime() external view returns(uint256 time);
 
-    function currentCommitteeFreedStartTime() external view returns(uint);
+    function currentCommitteeFreedStartTime() external view returns(uint256);
 
-    function setCommitteeFreedStartTime(uint _committeeFreedStartTime) external;
+    function setCommitteeFreedStartTime(uint256 _committeeFreedStartTime) external;
 
-    function committeeMinStack() external view returns(uint);
+    function committeeMinStack() external view returns(uint256);
     
-    function setCommitteeMinStack(uint _committeeMinStack) external;
+    function setCommitteeMinStack(uint256 _committeeMinStack) external;
     
 }
 
@@ -109,9 +109,9 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     uint256[] private inviteRates = [10,6,5,4,3,2,1,1,1,1];
 
     //committee config
-    uint256 public committeeFreedTimes = 10;
-    uint public committeeIntervalTime = MONTH_SECONDS;
-    uint public committeeFreedStartTime = MONTH_SECONDS*3;
+    uint256 public committeeFreedTimes = 0;
+    uint256 public committeeIntervalTime = MONTH_SECONDS;
+    uint256 public committeeFreedStartTime = MONTH_SECONDS*3;
     uint256 public committeeMinStack = 5000*(10**18);
 
 
@@ -202,12 +202,12 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
         committeeFreedStartTime = _committeeFreedStartTime;
     }
 
-    function currentCommitteeFreedStartTime() public view returns(uint){
-        uint time =  block.timestamp+committeeFreedStartTime;
+    function currentCommitteeFreedStartTime() public view returns(uint256){
+        uint256 time =  block.timestamp + committeeFreedStartTime;
         return dateTimeAPI.beginOfDay(time);
     }
 
-    function setCommitteeMinStack(uint _committeeMinStack) external{
+    function setCommitteeMinStack(uint256 _committeeMinStack) external{
         require( hasRole(UPDATE_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), 'KeenConfig: FORBIDDEN');
         committeeMinStack = _committeeMinStack;
     }
