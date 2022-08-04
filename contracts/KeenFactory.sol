@@ -44,6 +44,7 @@ interface IKeenFactory {
     function setKeenConfig(address) external;
 
     function addStack(address tokenA, address tokenB,uint256 _stack) external;
+    function getBetReceive() external view returns(address);
 
 }
 
@@ -385,11 +386,11 @@ contract KeenPair is IKeenPair, KeenERC20 {
     //betTime ==> amount
     mapping (uint256 => uint256)  public  betSummaryMap;
     //betTime ==> (betType ==> amount)
-    mapping (uint256 => uint256[])  public  betTypeMap;
+    mapping (uint256 => mapping (uint256 => uint256))  public  betTypeMap;
     //betTime ==> (betType ==> amount)
     mapping (uint256 => mapping (address => uint256))  public  acceptAmountMap;
     //betTime ==> (betType ==> (address ==> amount))
-    mapping (uint256 => mapping (address => uint256)[])  public  betAddressMap;
+    mapping (uint256 => mapping (uint256 => mapping (address => uint256)))  public  betAddressMap;
 
     //user ==> freedTime[]
     mapping (address => uint256[])  public  committeeFreedTime;
@@ -621,7 +622,6 @@ contract KeenPair is IKeenPair, KeenERC20 {
 
         _addStack(amount0,amount1,stackType);
         
-
         _burn(address(this), liquidity);
 
         require(stackType != 2 || _subFreezeLiquidity(to,liquidity) == liquidity,'KeenPair: FREEZE_LIQUIDITY_ERROR'); 
@@ -667,7 +667,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
         if(stackType == 1){
             companyStack = companyStack.add(stackAmount);
         }else if(stackType == 2){
-            committeeStack = companyStack.add(stackAmount);
+            committeeStack = committeeStack.add(stackAmount);
         }else if(stackType == 3){
             shareholderStack = shareholderStack.add(stackAmount);
         }
@@ -715,7 +715,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
             _betToken = token1;
         }
         uint256 _betTotal = IERC20(_betToken).balanceOf(IKeenConfig(_keenConfig).betReceive());
-        uint256 lastBetAmount = _betTotal.sub(betSummaryMap[betTime]);
+        uint256 lastBetAmount = _betTotal- betSummaryMap[betTime];
         require(lastBetAmount >= amountIn, 'Keen: BETS_ERROR');
 
         
@@ -815,7 +815,7 @@ contract KeenPair is IKeenPair, KeenERC20 {
         if(stackType == 1){
             companyStack = companyStack.sub(stackAmount);
         }else if(stackType == 2){
-            committeeStack = companyStack.sub(stackAmount);
+            committeeStack = committeeStack.sub(stackAmount);
         }else if(stackType == 3){
             shareholderStack = shareholderStack.sub(stackAmount);
         }
@@ -959,22 +959,10 @@ contract KeenFactory is IKeenFactory {
         emit PairCreated(token0, token1, pair, allPairs.length);
     }
 
-    // function pairCreate(address token0,address token1,address replaceToken0,address replaceToken1,address stackToken,uint256 maxStake) private {
-    //     bytes memory bytecode = type(KeenPair).creationCode;
-    //     bytes32 salt = keccak256(abi.encodePacked(token0, token1));
-    //     assembly {
-    //         pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
-    //     }
-    //     IKeenPair(pair).initialize(token0, token1,replaceToken0,replaceToken1,stackToken,calculateStackArray(maxStake));
-    //     getPair[token0][token1] = pair;
-    //     getPair[token1][token0] = pair; // populate mapping in the reverse direction
-    //     allPairs.push(pair);
-    //     emit PairCreated(token0, token1, pair, allPairs.length);
-    // }
 
     function announce(uint256 betTime,uint256 [] calldata results) external {
         require(msg.sender == feeToSetter, 'Keen: FORBIDDEN');
-        require(betResultMap[betTime][0] == 0, 'Keen: RESULT_REPEAT_ERROR');
+        require(betResultMap[betTime].length == 0, 'Keen: RESULT_REPEAT_ERROR');
         betResultMap[betTime] = results;
         for (uint256 index = 0; index < allPairs.length; index++) {
             address pair = allPairs[index];
@@ -995,6 +983,8 @@ contract KeenFactory is IKeenFactory {
     function calculateStack(uint256 maxStake,uint256 ratio) public pure returns(uint256){
         return maxStake.mul(ratio).div(10**2);
     }
+
+    
 
     function setFeeTo(address _feeTo) external {
         require(msg.sender == feeToSetter, 'Keen: FORBIDDEN');
@@ -1020,5 +1010,9 @@ contract KeenFactory is IKeenFactory {
 
     function betResultArray(uint256 betTime) external view returns (uint256 [] memory){
         return betResultMap[betTime];
+    }
+
+    function getBetReceive() public view returns(address){
+        return IKeenConfig(keenConfig).betReceive();
     }
 }

@@ -147,19 +147,32 @@ pragma solidity >=0.5.0;
 interface IKeenFactory {
     event PairCreated(address indexed token0, address indexed token1, address pair, uint);
 
+    event AnnounceResult(uint betType,uint);
+
     function feeTo() external view returns (address);
     function feeToSetter() external view returns (address);
+    function keenConfig() external view returns (address);
+    function betResultArray(uint256 betTime) external view returns (uint256 [] memory);
+
 
     function getPair(address tokenA, address tokenB) external view returns (address pair);
     function allPairs(uint) external view returns (address pair);
     function allPairsLength() external view returns (uint);
 
-    function createPair(address tokenA, address tokenB,address replaceTokenA,address replaceTokenB) external returns (address pair);
+    function createPair(address[] calldata path,address[] calldata replacePath,uint256 maxStake) external returns (address pair);
+    function announce(uint256 betTime,uint256 [] calldata results) external;
+
+    function calculateStackArray(uint256 maxStake) external view returns(uint256 [] memory);
+
+    function calculateStack(uint256 maxStake,uint256 ratio) external pure returns(uint256);
 
     function setFeeTo(address) external;
     function setFeeToSetter(address) external;
+    function setKeenConfig(address) external;
 
-    function INIT_CODE_PAIR_HASH() external view returns (bytes32);
+    function addStack(address tokenA, address tokenB,uint256 _stack) external;
+    function getBetReceive() external view returns(address);
+
 }
 
 // File: contracts\libraries\SafeMath.sol
@@ -268,7 +281,7 @@ library KeenLibrary {
                 hex'ff',
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
-                hex'aff369cd863ead4f3b14d4f6f4ddd39b6f724f87e378d4c848a9df1ace7ef07a' // init code hash
+                hex'ed643b98febb8bc860df619b52a17f5f217eaca97713c32a12fa0f73534ba68b' // init code hash
             ))));
     }
 
@@ -345,6 +358,7 @@ library KeenLibrary {
             amounts[i - 1] = getAmountIn(amounts[i], reserveIn, reserveOut);
         }
     }
+
 }
 
 // File: contracts\interfaces\IERC20.sol
@@ -623,10 +637,10 @@ contract KeenRouter {
         uint deadline
     ) external virtual  ensure(deadline){
         address stackToken = KeenLibrary.getStackToken(factory, path[0], path[1]);
-        require(path[0] != stackToken,"KeenRouter: PATH_0_ERROR");
+        require(path[1] == stackToken,"KeenRouter: PATH_0_ERROR");
         //bet amount summary
         TransferHelper.safeTransferFrom(
-            path[0], msg.sender, address(this), amountIn
+            path[0], msg.sender, IKeenFactory(factory).getBetReceive(), amountIn
         );
         //Input data
         address pairAddress = KeenLibrary.pairFor(factory, path[0], path[1]);

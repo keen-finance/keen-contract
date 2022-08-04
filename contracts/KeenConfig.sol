@@ -104,12 +104,12 @@ contract KeenConfig is IKeenConfig,Context,AccessControlEnumerable{
     uint256 private committeeStackRatio = 30;
     uint256 private shareholderStackRatio = 50;
 
-    uint256 public betInterval = 30;
+    uint256 public betInterval = 60;
 
     uint256[] private inviteRates = [10,6,5,4,3,2,1,1,1,1];
 
     //committee config
-    uint256 public committeeFreedTimes = 0;
+    uint256 public committeeFreedTimes = 10;
     uint256 public committeeIntervalTime = MONTH_SECONDS;
     uint256 public committeeFreedStartTime = MONTH_SECONDS*3;
     uint256 public committeeMinStack = 5000*(10**18);

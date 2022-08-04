@@ -97,7 +97,7 @@ contract KeenUser is Context,AccessControlEnumerable{
     }
 
     function calculateBetReward(address pair,uint256 amount,address to) external {
-        require(_msgSender() == keenRouter, "KeenUser: must is keenRouter to calculateBet");
+        require(_msgSender() == keenRouter, "KeenUser: must is keenRouter to calculateBetReward");
         
         uint256 factor = IKeenConfig(keenConfig).betMintFactor(pair);
         if(factor == 0){
@@ -105,7 +105,7 @@ contract KeenUser is Context,AccessControlEnumerable{
         }
         uint256 max = IKeenConfig(keenConfig).betMintMax(pair);
 
-        uint256 tomorrow = dateTimeAPI.beginOfDay(uint16(block.timestamp+DAY_SECONDS));
+        uint256 tomorrow = dateTimeAPI.beginOfDay(block.timestamp+DAY_SECONDS);
 
         //self
         uint256 reward = amount.mul(factor).div(1000);
@@ -122,21 +122,15 @@ contract KeenUser is Context,AccessControlEnumerable{
             if(currentParent == address(0)){
                 break;
             }
-            bool flag = false;
-            if(containsStackUser(1,currentParent) || containsStackUser(2,currentParent)){
-                flag = true;
-            }else if(containsStackUser(3,currentParent) && index < 3){
-                flag = true;
-            }
-            if(!flag){
-                continue;
-            }
-            uint256 _rate = inviteRates[index];
-            uint256 parentReward = _reward.mul(_rate).div(100);
 
-            uint256 _parentReward = rewardToUser(pair,currentParent,parentReward,max,tomorrow);
-            if(parentReward != _parentReward){
-                break;
+            if(containsStackUser(3,currentParent) || containsStackUser(2,currentParent) || containsStackUser(1,currentParent)){
+                uint256 _rate = inviteRates[index];
+                uint256 parentReward = _reward.mul(_rate).div(100);
+
+                uint256 _parentReward = rewardToUser(pair,currentParent,parentReward,max,tomorrow);
+                if(parentReward != _parentReward){
+                    break;
+                }
             }
         }
     }

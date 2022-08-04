@@ -40,8 +40,11 @@ describe('KeenRouter', function () {
 
   let committeeStackHolderFrom
 
-  let parent
+  let betUser
 
+  let betUserFrom
+
+  let parent
 
 
 
@@ -64,8 +67,9 @@ describe('KeenRouter', function () {
   let createPairLogs
 
   let betReceive
-
+  let betReceiveFrom
   let betSender
+  let betSenderFrom
   let wusdt
   let keenConfigContract
   let dateTimeApi
@@ -89,9 +93,22 @@ describe('KeenRouter', function () {
 
     committeeStackHolderFrom = { from: committeeStackHolder }
 
+    betUser = accounts[5]
+
+    betUserFrom = { from: betUser }
+
+
+    betUser2 = accounts[6]
+
+    betUser2From = { from: betUser2 }
+
     betReceive = accounts[9]
 
+    betReceiveFrom = { from: betReceive }
+
     betSender = accounts[10]
+
+    betSenderFrom = { from: betSender }
     
 
     deployer = accounts[0]
@@ -140,10 +157,11 @@ describe('KeenRouter', function () {
     //create pair keenUserContract address _tcpPosition,address _keenRouter,address _keenConfig,address _dateTimeAPI,address _keenToken
     keenUserContract = await KeenUser.new(tcpPosition,keenConfigContract.address,dateTimeApi.address,keen.address);
     await keenUserContract.createStackUser(companyUser,1,zero)
+    
 
     //create keen router
     keenRouterContract = await KeenRouter.new(keenFactoryContract.address,WETH,wkeen.address,keenUserContract.address,committeeStackHolder)
-
+    await keenUserContract.updateKeenRouter(keenRouterContract.address);
 
     // await keen.approve(keenRouterContract.address,web3.utils.toWei('600000', 'ether'),committeeStackHolderFrom)
   })
@@ -509,6 +527,100 @@ describe('KeenRouter', function () {
       const containsStackUserTwo = await keenUserContract.containsStackUser(2,committeeUser)
       expect(containsStackUserTwo).to.be.equal(false)
 
+    })
+
+    
+  })
+
+
+  describe('bet', function () {
+    
+    it('should be bet sucess', async function () {
+      let companyStack = await keenPair.companyStack()
+      expect(companyStack).to.be.eq.BN(web3.utils.toWei('400000', 'ether'))
+      
+      await usdt.supply(companyUser,web3.utils.toWei('400000', 'ether'))
+      await keen.supply(companyUser,web3.utils.toWei('400000', 'ether'))
+
+      let usdtBalance = await usdt.balanceOf(companyUser)
+      let keenBalance = await keen.balanceOf(companyUser)
+      
+      expect(usdtBalance).to.be.eq.BN(web3.utils.toWei('400000', 'ether'))
+      expect(keenBalance).to.be.eq.BN(web3.utils.toWei('400000', 'ether'))
+
+      await usdt.approve(keenRouterContract.address,web3.utils.toWei('800000', 'ether'),companyUserFrom)
+      await keen.approve(keenRouterContract.address,web3.utils.toWei('800000', 'ether'),companyUserFrom)
+
+      let usdtAllowance = await usdt.allowance(companyUser,keenRouterContract.address,companyUserFrom)
+      let keenAllowance = await keen.allowance(companyUser,keenRouterContract.address,companyUserFrom)
+      
+      expect(usdtAllowance).to.be.gt.BN(web3.utils.toWei('400000', 'ether'))
+      expect(keenAllowance).to.be.gt.BN(web3.utils.toWei('400000', 'ether'))
+      await keenRouterContract.addCompanyLiquidity(
+        usdt.address,keen.address,
+        web3.utils.toWei('400000', 'ether'),web3.utils.toWei('400000', 'ether'),
+        web3.utils.toWei('400000', 'ether'),web3.utils.toWei('400000', 'ether'),
+        companyUser,
+        new Date().getTime(),
+        companyUserFrom
+      )
+      let pariBalance = await usdt.balanceOf(keenPair.address)
+      console.log("pariBalance",pariBalance.toString())
+      let keenPairBalance = await keenPair.balanceOf(companyUser)
+      
+      expect(keenPairBalance).to.be.gt.BN(web3.utils.toWei('390000', 'ether'))
+
+      await usdt.supply(betUser,web3.utils.toWei('100', 'ether'));
+      await usdt.approve(keenRouterContract.address,web3.utils.toWei('800000', 'ether'),betUserFrom)
+      console.log(parseInt(new Date().getTime()/1000));
+      var date=new Date();     //1. js获取当前时间
+      var min=date.getMinutes();  //2. 获取当前分钟
+      date.setMinutes(min+4);
+      date.setSeconds(0)
+      date.setMilliseconds(0)
+      let  betTime = date.getTime()
+      await keenRouterContract.bet(
+        web3.utils.toWei('100', 'ether'),
+        [usdt.address,keen.address],
+        0,
+        betTime,
+        parseInt(new Date().getTime()/1000)+240,
+        betUserFrom
+      )
+      let receiveBalance = await usdt.balanceOf(betReceive)
+      expect(receiveBalance).to.be.eq.BN(web3.utils.toWei('100', 'ether'))
+
+      await usdt.supply(betUser2,web3.utils.toWei('100', 'ether'));
+      await usdt.approve(keenRouterContract.address,web3.utils.toWei('800000', 'ether'),betUser2From)
+      await keenRouterContract.bet(
+        web3.utils.toWei('100', 'ether'),
+        [usdt.address,keen.address],
+        1,
+        betTime,
+        parseInt(new Date().getTime()/1000)+240,
+        betUser2From
+      )
+      await usdt.approve(keenPair.address,web3.utils.toWei('800000', 'ether'),betReceiveFrom)
+      await keenFactoryContract.announce(betTime,[1,2]);
+      await usdt.approve(keenPair.address,web3.utils.toWei('800000', 'ether'),betSenderFrom)
+      // receiveBalance = await usdt.balanceOf(betReceive)
+      // expect(receiveBalance).to.be.eq.BN(web3.utils.toWei('100', 'ether'))
+      let senderBalance = await usdt.balanceOf(betSender)
+      expect(senderBalance).to.be.eq.BN(web3.utils.toWei('195', 'ether'))
+      await keenRouterContract.accept(
+        [usdt.address,keen.address],
+        betTime,
+        parseInt(new Date().getTime()/1000)+240,
+        betUserFrom
+      )
+      let betUserBalance = await usdt.balanceOf(betUser)
+      expect(betUserBalance).to.be.eq.BN(web3.utils.toWei('195', 'ether'))
+
+      let betUser2Balance = await usdt.balanceOf(betUser2)
+      expect(betUser2Balance).to.be.eq.BN(web3.utils.toWei('0', 'ether'))
+
+      pariBalance = await usdt.balanceOf(keenPair.address)
+      console.log("pariBalance",pariBalance.toString())
     })
 
     
