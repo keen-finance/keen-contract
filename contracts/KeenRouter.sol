@@ -38,7 +38,7 @@ pragma solidity >=0.6.2;
 
 interface IKeenRouter01 {
     function factory() external pure returns (address);
-    function WETH() external pure returns (address);
+    
 
     function addLiquidity(
         address tokenA,
@@ -381,15 +381,9 @@ interface IERC20 {
     function transferFrom(address from, address to, uint value) external returns (bool);
 }
 
-// File: contracts\interfaces\IWETH.sol
-
 pragma solidity >=0.5.0;
 
-interface IWETH {
-    function deposit() external payable;
-    function transfer(address to, uint value) external returns (bool);
-    function withdraw(uint) external;
-}
+
 // File: contracts\KeenUser.sol
 pragma solidity >=0.5.0;
 interface IKeenUser{
@@ -414,7 +408,6 @@ contract KeenRouter {
     using SafeMath for uint;
 
     address public immutable  factory;
-    address public immutable  WETH;
     address public immutable WKEEN;
     address public immutable keenUserContract;
 
@@ -427,17 +420,13 @@ contract KeenRouter {
 
 
 
-    constructor(address _factory, address _WETH, address _WKEEN, address _keenUserContract, address _committeeStackHolder) public {
+    constructor(address _factory, address _WKEEN, address _keenUserContract, address _committeeStackHolder) public {
         factory = _factory;
-        WETH = _WETH;
         WKEEN = _WKEEN;
         keenUserContract = _keenUserContract;
         committeeStackHolder = _committeeStackHolder;
     }
 
-    receive() external payable {
-        assert(msg.sender == WETH); // only accept ETH via fallback from the WETH contract
-    }
 
     // **** ADD LIQUIDITY ****
     function _addLiquidity(

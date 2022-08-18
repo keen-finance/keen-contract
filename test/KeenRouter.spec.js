@@ -120,16 +120,16 @@ describe('KeenRouter', function () {
     pancakeRouter = deployer;
 
     //create usdt token
-    usdt = await RewardToken.new(deployer)
+    usdt = await RewardToken.new(deployer,'USDT','USDT')
 
     //create wusdt token
-    wusdt = await RewardToken.new(deployer)
+    wusdt = await RewardToken.new(deployer,'WUSDT','WUSDT')
     // 
     // await usdt.supply(committeeUser,web3.utils.toWei('100000', 'ether'))
     // await usdt.supply(shareholdersUser,web3.utils.toWei('10000', 'ether'))
     
     //create keen token
-    keen = await RewardToken.new(deployer)
+    keen = await RewardToken.new(deployer,'KEEN','KEEN')
     // await keen.supply(companyUser,web3.utils.toWei('400000', 'ether'))
     // await keen.supply(committeeStackHolder,web3.utils.toWei('600000', 'ether'))
     // await keen.supply(shareholdersUser,web3.utils.toWei('10000', 'ether'))

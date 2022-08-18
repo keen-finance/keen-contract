@@ -58,9 +58,9 @@ describe('KeenFactory', function () {
 
     fromUser = { from: accounts[deployer] }
 
-    tokenA = await RewardToken.new(deployer)
+    tokenA = await RewardToken.new(deployer,'USDT','USDT')
     await tokenA.supply(user,web3.utils.toWei('100000', 'ether'))
-    tokenB = await RewardToken.new(deployer)
+    tokenB = await RewardToken.new(deployer,'KEEN','KEEN')
     await tokenB.supply(user,web3.utils.toWei('100000', 'ether'))
 
     let dateTime = await DateTime.new();

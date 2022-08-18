@@ -52,8 +52,6 @@ export type { IKeenRouter02 } from "./contracts/KeenRouter.sol/IKeenRouter02";
 export { IKeenRouter02__factory } from "./factories/contracts/KeenRouter.sol/IKeenRouter02__factory";
 export type { IKeenUser } from "./contracts/KeenRouter.sol/IKeenUser";
 export { IKeenUser__factory } from "./factories/contracts/KeenRouter.sol/IKeenUser__factory";
-export type { IWETH } from "./contracts/KeenRouter.sol/IWETH";
-export { IWETH__factory } from "./factories/contracts/KeenRouter.sol/IWETH__factory";
 export type { KeenRouter } from "./contracts/KeenRouter.sol/KeenRouter";
 export { KeenRouter__factory } from "./factories/contracts/KeenRouter.sol/KeenRouter__factory";
 export type { KeenUser } from "./contracts/KeenUser.sol/KeenUser";

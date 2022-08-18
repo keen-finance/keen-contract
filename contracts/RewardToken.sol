@@ -841,8 +841,8 @@ contract RewardToken is ERC20, ERC20Detailed, ERC20Capped, Governable {
 
   uint256 public constant HARD_CAP = 10 * (10 ** 6) * (10 ** 18);
 
-  constructor(address _storage) public
-  ERC20Detailed("Keen Reward Token", "KEEN", 18)
+  constructor(address _storage,string memory _name,string memory _symbol) public
+  ERC20Detailed(_name, _symbol, 18)
   ERC20Capped(HARD_CAP)
   Governable(_storage) {
     // msg.sender should not be a minter

@@ -39,7 +39,7 @@
     "semantic-release": "semantic-release",
     "commit-msg": "validate-commit-msg",
     "compile": "npx hardhat compile",
-    "deploy-local": "npx hardhat run scripts/deploy/test.ts --network localhost",
+    "deploy-local": "npx hardhat run scripts/deploy/deploy.ts --network localhost",
     "create-collection": "npx hardhat run scripts/deploy/test.ts --network localhost"
   },
   "author": "Decentraland",
